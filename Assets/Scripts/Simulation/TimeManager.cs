@@ -40,8 +40,12 @@ public class TimeManager : MonoBehaviour
             // Reset the timer and add a day
             timer = 0f;
             currentDay++;
-            
-            Debug.Log($"Day {currentDay}");
+
+            // Log day in a debug message every 5 days
+            if(currentDay % 5 == 0)
+            {
+                Debug.Log($"Day {currentDay}");   
+            }
 
             // Broadcast the signal to the rest of the game
             OnDayChanged?.Invoke(); 

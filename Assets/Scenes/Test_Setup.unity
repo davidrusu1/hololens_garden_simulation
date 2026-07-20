@@ -151,7 +151,7 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 6d04fbd6f570f9148bb4ab218d878289, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
-  realSecondsPerDay: 5
+  realSecondsPerDay: 1
 --- !u!4 &268376155
 Transform:
   m_ObjectHideFlags: 0
@@ -162,6 +162,55 @@ Transform:
   serializedVersion: 2
   m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
   m_LocalPosition: {x: -0.17475483, y: 1.5722039, z: 0.036136627}
+  m_LocalScale: {x: 1, y: 1, z: 1}
+  m_ConstrainProportionsScale: 0
+  m_Children: []
+  m_Father: {fileID: 0}
+  m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
+--- !u!1 &504401607
+GameObject:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  serializedVersion: 6
+  m_Component:
+  - component: {fileID: 504401609}
+  - component: {fileID: 504401608}
+  m_Layer: 0
+  m_Name: WinterWeat
+  m_TagString: Untagged
+  m_Icon: {fileID: 0}
+  m_NavMeshLayer: 0
+  m_StaticEditorFlags: 0
+  m_IsActive: 1
+--- !u!114 &504401608
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 504401607}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 749e76be01aafc048adc556b2b6f5fa3, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: 
+  plantData: {fileID: 11400000, guid: 5d49214af216b89489e772e8904083bc, type: 2}
+  currentDVS: -0.1
+  currentTemperature: 10
+  currentTSUM: 0
+  currentDayLength: 15
+--- !u!4 &504401609
+Transform:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 504401607}
+  serializedVersion: 2
+  m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
+  m_LocalPosition: {x: -0.11999999, y: 1.54, z: 0.99}
   m_LocalScale: {x: 1, y: 1, z: 1}
   m_ConstrainProportionsScale: 0
   m_Children: []
@@ -456,7 +505,7 @@ GameObject:
   - component: {fileID: 1748146645}
   - component: {fileID: 1748146647}
   m_Layer: 0
-  m_Name: Plant
+  m_Name: Sunflower
   m_TagString: Untagged
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
@@ -788,8 +837,9 @@ MonoBehaviour:
   m_EditorClassIdentifier: 
   plantData: {fileID: 11400000, guid: 819b161ed6f688d4aa2f4f9fd56b0927, type: 2}
   currentDVS: -0.1
-  currentTemperature: 20
+  currentTemperature: 30
   currentTSUM: 0
+  currentDayLength: 12
 --- !u!1001 &1826413925
 PrefabInstance:
   m_ObjectHideFlags: 0
@@ -929,3 +979,4 @@ SceneRoots:
   - {fileID: 1748146644}
   - {fileID: 1043184989}
   - {fileID: 268376155}
+  - {fileID: 504401609}

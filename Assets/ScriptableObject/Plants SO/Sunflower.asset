@@ -19,11 +19,21 @@ MonoBehaviour:
   <IDSL>k__BackingField: 0
   <DLC>k__BackingField: -99
   <DLO>k__BackingField: -99
-  <TSUM1>k__BackingField: 1050
-  <TSUM2>k__BackingField: 1000
-  <DVSEND>k__BackingField: 2
   <DTSMTB>k__BackingField:
   - {x: 0, y: 0}
   - {x: 2, y: 0}
   - {x: 18, y: 16}
   - {x: 40, y: 38}
+  <VERNBASE>k__BackingField: 14
+  <VERNSAT>k__BackingField: 70
+  <VERNRTB>k__BackingField:
+  - {x: -8, y: 0}
+  - {x: -4, y: 0}
+  - {x: 3, y: 1}
+  - {x: 10, y: 1}
+  - {x: 17, y: 0}
+  - {x: 20, y: 0}
+  <VERNDVS>k__BackingField: 0.3
+  <TSUM1>k__BackingField: 1050
+  <TSUM2>k__BackingField: 1000
+  <DVSEND>k__BackingField: 2

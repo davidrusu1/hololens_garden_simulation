@@ -38,6 +38,24 @@ public class PlantData : ScriptableObject
     [field: SerializeField]
     [field: Tooltip("Optimum day length for development")]
     public float DLO {get; private set;}
+    
+    [field: SerializeField]
+    [field: Tooltip("AFGEN Table: X = Daily Temp, Y = Effective Heat Absorbed")]
+    public Vector2[] DTSMTB { get; private set; }
+
+    // Vernalization parameters
+    [field: SerializeField]
+    [field: Tooltip("Base vernalization requirements ")]
+    public float VERNBASE {get; private set;}
+    [field: SerializeField]
+    [field: Tooltip("Saturated vernalization requirements ")]
+    public float VERNSAT {get; private set;}
+    [field: SerializeField]
+    [field: Tooltip("Vernalization AFGEN Table: X = Daily Temp, Y = Vernalization Rate")]
+    public Vector2[] VERNRTB { get; private set; }
+    [field: SerializeField]
+    [field: Tooltip("DVS after which vernalization will be disabled")]
+    public float VERNDVS {get; private set;}
 
     // Temperature parameters for flowering
     [field: SerializeField]
@@ -53,13 +71,4 @@ public class PlantData : ScriptableObject
     [field: SerializeField]
     [field: Tooltip("Development stage at harvest")]
     public float DVSEND {get; private set;}
-
-    [field: SerializeField, Tooltip("AFGEN Table: X = Daily Temp, Y = Effective Heat Absorbed")]
-    public Vector2[] DTSMTB { get; private set; } = new Vector2[]
-    {
-        new Vector2(0f, 0f),   // Freezing
-        new Vector2(10f, 0f),  // Base Temp
-        new Vector2(25f, 15f), // Optimal Temp
-        new Vector2(35f, 0f)   // Lethal Temp
-    };
 }
