@@ -1,0 +1,137 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!1 &6966580366650232745
+GameObject:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  serializedVersion: 6
+  m_Component:
+  - component: {fileID: 6463808107597517287}
+  - component: {fileID: 3963263942920490560}
+  - component: {fileID: 3843757657974380189}
+  - component: {fileID: 4308147126472987659}
+  m_Layer: 0
+  m_Name: SunflowerVisual
+  m_TagString: Untagged
+  m_Icon: {fileID: 0}
+  m_NavMeshLayer: 0
+  m_StaticEditorFlags: 0
+  m_IsActive: 0
+--- !u!4 &6463808107597517287
+Transform:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 6966580366650232745}
+  serializedVersion: 2
+  m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
+  m_LocalPosition: {x: 0, y: 0, z: 0}
+  m_LocalScale: {x: 1, y: 1, z: 1}
+  m_ConstrainProportionsScale: 0
+  m_Children: []
+  m_Father: {fileID: 0}
+  m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
+--- !u!114 &3963263942920490560
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 6966580366650232745}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 0f1d2d957b15648aa9049d71d9187434, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: 
+  arucoAnchorPrefab: {fileID: 0}
+  secondsBeforeStemAppears: 3
+  showBackdrop: 0
+  backdropDistance: 4.6
+  backdropSize: {x: 7.5, y: 5.2}
+  backdropCenterHeight: 2.15
+  backdropColor: {r: 0.68, g: 0.7, b: 0.66, a: 1}
+  stagePrefabs:
+  - {fileID: 2777944529714014449, guid: 24b2a15d29c544841863263f59b0d071, type: 3}
+  - {fileID: 4652878127038461428, guid: 2681890994ec14f84bd352b8582c5b73, type: 3}
+  - {fileID: 1803967602984479490, guid: ca9dc2cb4123b423997c88e0b3ff0240, type: 3}
+  - {fileID: 1663310084716527850, guid: a97f79e7f9e08405face4995b7e540c7, type: 3}
+  modelContainer: {fileID: 0}
+  unifiedStemColor: {r: 0.08, g: 0.32, b: 0.09, a: 1}
+  startingStage: 1
+  secondsBetweenGrowthSteps: 3
+  scaleMultiplier: 1.2
+  baseThicknessGrowthMultiplier: 1.12
+  tipThicknessGrowthMultiplier: 1.04
+  hideRoundedStemTips: 1
+  maximumTotalStemLength: 3
+  maximumStemThickness: 0.14
+  growthStepsBeforeNextStage: 3
+  stackNewStemAfterStageFour: 1
+  secondsBeforeNextStackedStem: 3
+  stackedStemOverlap: 0.015
+  startAutomatically: 0
+  simulationSpeedMultiplier: 1
+  leafGrowthController: {fileID: 3843757657974380189}
+  flowerGrowthController: {fileID: 4308147126472987659}
+--- !u!114 &3843757657974380189
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 6966580366650232745}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: e75eec887470e4cc8bca34262728e148, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: 
+  leafStagePrefabs:
+  - {fileID: 7594543168288010665, guid: a08a8d5794e76471f919811698d9982b, type: 3}
+  - {fileID: 2245847448100543330, guid: a0d280f85050a494287f0392b2362f82, type: 3}
+  - {fileID: 543713220355123769, guid: 6b247c1cd43024ffa9b925d97691d63a, type: 3}
+  leavesPerStemSegment: 2
+  leafAngle: 0
+  youngLeafUpwardAngle: 28
+  developingLeafUpwardAngle: 10
+  verticalSpawnMargin: 0.12
+  leafConnectionHeightOffset: -0.04
+  leafPetioleOverlap: 0.025
+  leafPetioleThicknessMultiplier: 1.15
+  leafStemInsertionRatio: 1
+  leafConnectionBandFraction: 0.08
+  azimuthVariation: 5
+  leafPhyllotaxisAngle: 137.5
+  lowerLeafSize: 0.82
+  middleLeafSize: 1.12
+  upperLeafSize: 0.7
+  maximumLeafCount: 12
+  delayBetweenLeaves: 1
+  leafGrowthDuration: 3
+  delayBetweenLeafStages: 0.75
+  simulationSpeedMultiplier: 1
+--- !u!114 &4308147126472987659
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 6966580366650232745}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 7bb3098ccb62848e59a7d449d0d00379, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: 
+  flowerStagePrefabs:
+  - {fileID: 4977728597169322625, guid: 4464065a3f01c45b2acfc9720b21d862, type: 3}
+  - {fileID: 6496763349975744563, guid: 7d0448ff5869144b9a4e09cb639d6542, type: 3}
+  - {fileID: 5834539796231308268, guid: 4a642be727fe541bd88bffc1a647e563, type: 3}
+  secondsBetweenGrowthSteps: 3
+  simulationSpeedMultiplier: 1
+  scaleMultiplier: 1.2
+  growthStepsBeforeNextStage: 3
+  flowerSizeMultiplier: 1.5
+  peduncleStemOverlap: 0.015
+  peduncleBaseBandFraction: 0.06
