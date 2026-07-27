@@ -71,6 +71,17 @@ namespace ICI.PlantGrowth
         [SerializeField, Range(0.25f, 2f)]
         private float upperLeafSize = 0.7f;
 
+        [SerializeField, Min(0.05f)]
+        [Tooltip("Maximum visible length of a sunflower leaf in world metres.")]
+        private float maximumLeafWorldSize = 0.42f;
+
+        [Header("Leaf appearance")]
+        [SerializeField]
+        private Color leafSurfaceColor = new Color(0.08f, 0.42f, 0.12f, 1f);
+
+        [SerializeField]
+        private Color leafVeinColor = new Color(0.025f, 0.18f, 0.045f, 1f);
+
         [SerializeField, Min(1)]
         private int maximumLeafCount = 12;
 
@@ -94,6 +105,8 @@ namespace ICI.PlantGrowth
         private bool completeImmediatelyRequested;
         private bool developmentStageDriven;
         private float currentDevelopmentStage = -0.1f;
+        private Material leafSurfaceMaterial;
+        private Material leafVeinMaterial;
 
         public int CreatedLeafCount => createdLeafCount;
 
@@ -248,6 +261,7 @@ namespace ICI.PlantGrowth
                 CopyPrefabTransform(activeLeaf.transform, leafStagePrefabs[stage].transform);
                 ReinforceLeafConnection(activeLeaf);
                 ApplyStemColorToPetiole(activeLeaf);
+                ApplyStableLeafMaterials(activeLeaf);
 
                 Vector3 targetScale = activeLeaf.transform.localScale;
                 float naturalSize = Mathf.Max(MeasureLeafSize(activeLeaf), 0.0001f);
@@ -256,6 +270,7 @@ namespace ICI.PlantGrowth
                     * positionScale
                     * Mathf.Lerp(0.38f, 1f, stageMaturity);
                 desiredSize = Mathf.Max(previousSize, desiredSize);
+                desiredSize = Mathf.Min(desiredSize, maximumLeafWorldSize);
                 float targetRatio = desiredSize / naturalSize;
                 float startRatio = previousSize > 0f
                     ? Mathf.Min(targetRatio, previousSize / naturalSize)
@@ -408,6 +423,42 @@ namespace ICI.PlantGrowth
             }
         }
 
+        private void ApplyStableLeafMaterials(GameObject leaf)
+        {
+            EnsureLeafMaterials();
+
+            foreach (Renderer leafRenderer in leaf.GetComponentsInChildren<Renderer>(true))
+            {
+                string rendererName = leafRenderer.name;
+                if (rendererName.Contains("Petiole"))
+                {
+                    continue;
+                }
+
+                leafRenderer.sharedMaterial =
+                    rendererName.Contains("Surface")
+                        ? leafSurfaceMaterial
+                        : leafVeinMaterial;
+            }
+        }
+
+        private void EnsureLeafMaterials()
+        {
+            if (leafSurfaceMaterial != null && leafVeinMaterial != null)
+            {
+                return;
+            }
+
+            leafSurfaceMaterial = CreateStableMaterial(
+                "Runtime Sunflower Leaf Green",
+                leafSurfaceColor,
+                true);
+            leafVeinMaterial = CreateStableMaterial(
+                "Runtime Sunflower Leaf Veins",
+                leafVeinColor,
+                true);
+        }
+
         private void ReinforceLeafConnection(GameObject leaf)
         {
             MeshFilter petioleMesh = null;
@@ -419,7 +470,8 @@ namespace ICI.PlantGrowth
                 {
                     petioleMesh = meshFilter;
                 }
-                else if (meshFilter.name.Contains("Serrated Leaf Blade"))
+                else if (meshFilter.name.Contains("Serrated Leaf Blade")
+                    || meshFilter.name.Contains("Leaf Surface"))
                 {
                     bladeMesh = meshFilter;
                 }
@@ -629,6 +681,79 @@ namespace ICI.PlantGrowth
             return hasBounds ? Mathf.Max(bounds.size.x, bounds.size.y, bounds.size.z) : 0f;
         }
 
+        private static Material CreateStableMaterial(
+            string materialName,
+            Color color,
+            bool doubleSided)
+        {
+            Shader shader = Shader.Find("HDRP/Unlit")
+                ?? Shader.Find("Universal Render Pipeline/Unlit")
+                ?? Shader.Find("Unlit/Color")
+                ?? Shader.Find("Standard");
+            Material material = new Material(shader)
+            {
+                name = materialName,
+                hideFlags = HideFlags.DontSave
+            };
+
+            if (material.HasProperty("_BaseColorMap"))
+            {
+                material.SetTexture("_BaseColorMap", Texture2D.whiteTexture);
+            }
+            if (material.HasProperty("_MainTex"))
+            {
+                material.SetTexture("_MainTex", Texture2D.whiteTexture);
+            }
+
+            SetMaterialColor(material, "_BaseColor", color);
+            SetMaterialColor(material, "_Color", color);
+            SetMaterialColor(material, "_UnlitColor", color);
+
+            if (doubleSided)
+            {
+                SetMaterialFloat(material, "_CullMode", 0f);
+                SetMaterialFloat(material, "_CullModeForward", 0f);
+                SetMaterialFloat(material, "_DoubleSidedEnable", 1f);
+                SetMaterialFloat(material, "_Cull", 0f);
+            }
+
+            return material;
+        }
+
+        private static void SetMaterialColor(
+            Material material,
+            string propertyName,
+            Color color)
+        {
+            if (material.HasProperty(propertyName))
+            {
+                material.SetColor(propertyName, color);
+            }
+        }
+
+        private static void SetMaterialFloat(
+            Material material,
+            string propertyName,
+            float value)
+        {
+            if (material.HasProperty(propertyName))
+            {
+                material.SetFloat(propertyName, value);
+            }
+        }
+
+        private void OnDestroy()
+        {
+            if (leafSurfaceMaterial != null)
+            {
+                Destroy(leafSurfaceMaterial);
+            }
+            if (leafVeinMaterial != null)
+            {
+                Destroy(leafVeinMaterial);
+            }
+        }
+
         private bool HasAllLeafPrefabs()
         {
             if (leafStagePrefabs == null || leafStagePrefabs.Length != LeafStageCount)
@@ -670,6 +795,7 @@ namespace ICI.PlantGrowth
             lowerLeafSize = Mathf.Clamp(lowerLeafSize, 0.25f, 2f);
             middleLeafSize = Mathf.Clamp(middleLeafSize, 0.25f, 2f);
             upperLeafSize = Mathf.Clamp(upperLeafSize, 0.25f, 2f);
+            maximumLeafWorldSize = Mathf.Max(0.05f, maximumLeafWorldSize);
             leafStemInsertionRatio = Mathf.Clamp01(leafStemInsertionRatio);
             leafConnectionBandFraction = Mathf.Clamp(
                 leafConnectionBandFraction,

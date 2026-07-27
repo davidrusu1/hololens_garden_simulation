@@ -29,6 +29,20 @@ namespace ICI.PlantGrowth
         [Tooltip("Additional uniform scale applied to every flower stage.")]
         private float flowerSizeMultiplier = 1.5f;
 
+        [SerializeField, Min(0.1f)]
+        [Tooltip("Maximum diameter of the visible flower head in world metres.")]
+        private float maximumFlowerHeadDiameter = 0.45f;
+
+        [Header("Flower appearance")]
+        [SerializeField]
+        private Color petalColor = new Color(1f, 0.62f, 0.025f, 1f);
+
+        [SerializeField]
+        private Color centerColor = new Color(0.12f, 0.055f, 0.015f, 1f);
+
+        [SerializeField]
+        private Color bractColor = new Color(0.055f, 0.28f, 0.075f, 1f);
+
         [SerializeField, Min(0f)]
         [Tooltip("Vertical overlap between the flower peduncle and the top of the main stem.")]
         private float peduncleStemOverlap = 0.015f;
@@ -45,6 +59,9 @@ namespace ICI.PlantGrowth
         private bool developmentStageDriven;
         private float currentDevelopmentStage = -0.1f;
         private Vector3 developmentStageBaseScale;
+        private Material petalMaterial;
+        private Material centerMaterial;
+        private Material bractMaterial;
 
         public int CurrentStage => currentStage;
         public bool HasStarted => growthRoutine != null || activeFlower != null;
@@ -149,6 +166,7 @@ namespace ICI.PlantGrowth
                 * Mathf.Pow(
                     scaleMultiplier,
                     progressInsideStage * growthStepsBeforeNextStage);
+            ClampFlowerHeadSize(activeFlower);
             MatchPeduncleBaseThickness(activeFlower, stemTopThickness);
             AlignPeduncleBaseToStem(activeFlower, stemTopHeight);
         }
@@ -210,6 +228,7 @@ namespace ICI.PlantGrowth
                 for (int step = 0; step < growthStepsBeforeNextStage; step++)
                 {
                     activeFlower.transform.localScale *= scaleMultiplier;
+                    ClampFlowerHeadSize(activeFlower);
                     MatchPeduncleBaseThickness(activeFlower, stemTopThickness);
                     AlignPeduncleBaseToStem(activeFlower, stemTopHeight);
                 }
@@ -256,6 +275,7 @@ namespace ICI.PlantGrowth
                     }
 
                     activeFlower.transform.localScale *= scaleMultiplier;
+                    ClampFlowerHeadSize(activeFlower);
                     MatchPeduncleBaseThickness(activeFlower, stemTopThickness);
                     AlignPeduncleBaseToStem(activeFlower, stemTopHeight);
                 }
@@ -298,6 +318,7 @@ namespace ICI.PlantGrowth
             activeFlower.transform.localPosition += Vector3.up * stemTopHeight;
             FaceActiveCamera(activeFlower.transform);
             ApplyStemColorToPeduncle(activeFlower);
+            ApplyStableFlowerMaterials(activeFlower);
 
             if (minimumSize > 0f)
             {
@@ -308,6 +329,7 @@ namespace ICI.PlantGrowth
                 }
             }
 
+            ClampFlowerHeadSize(activeFlower);
             MatchPeduncleBaseThickness(activeFlower, stemTopThickness);
             AlignPeduncleBaseToStem(activeFlower, stemTopHeight);
         }
@@ -437,7 +459,7 @@ namespace ICI.PlantGrowth
         {
             return System.Array.FindAll(
                 flower.GetComponentsInChildren<MeshFilter>(true),
-                meshFilter => meshFilter.name.Contains("Peduncle"));
+                meshFilter => IsFlowerSupportName(meshFilter.name));
         }
 
         private static void FaceActiveCamera(Transform flower)
@@ -468,11 +490,85 @@ namespace ICI.PlantGrowth
 
             foreach (Renderer flowerRenderer in flower.GetComponentsInChildren<Renderer>(true))
             {
-                if (flowerRenderer.name.Contains("Peduncle"))
+                if (IsFlowerSupportName(flowerRenderer.name))
                 {
                     flowerRenderer.sharedMaterials = stemMaterials;
                 }
             }
+        }
+
+        private void ApplyStableFlowerMaterials(GameObject flower)
+        {
+            EnsureFlowerMaterials();
+
+            foreach (Renderer flowerRenderer in flower.GetComponentsInChildren<Renderer>(true))
+            {
+                string rendererName = flowerRenderer.name;
+                if (IsFlowerSupportName(rendererName))
+                {
+                    if (stemMaterials == null || stemMaterials.Length == 0)
+                    {
+                        flowerRenderer.sharedMaterial = bractMaterial;
+                    }
+                    continue;
+                }
+
+                if (rendererName.Contains("Petal")
+                    || rendererName.Contains("Yellow"))
+                {
+                    flowerRenderer.sharedMaterial = petalMaterial;
+                }
+                else if (rendererName.Contains("Center")
+                    || rendererName.Contains("Seed"))
+                {
+                    flowerRenderer.sharedMaterial = centerMaterial;
+                }
+                else
+                {
+                    flowerRenderer.sharedMaterial = bractMaterial;
+                }
+            }
+        }
+
+        private void EnsureFlowerMaterials()
+        {
+            if (petalMaterial != null
+                && centerMaterial != null
+                && bractMaterial != null)
+            {
+                return;
+            }
+
+            petalMaterial = CreateStableMaterial(
+                "Runtime Sunflower Petal Yellow",
+                petalColor);
+            centerMaterial = CreateStableMaterial(
+                "Runtime Sunflower Center Brown",
+                centerColor);
+            bractMaterial = CreateStableMaterial(
+                "Runtime Sunflower Bract Green",
+                bractColor);
+        }
+
+        private void ClampFlowerHeadSize(GameObject flower)
+        {
+            float currentDiameter = MeasureFlowerSize(flower);
+            if (currentDiameter <= maximumFlowerHeadDiameter
+                || currentDiameter <= 0.0001f)
+            {
+                return;
+            }
+
+            flower.transform.localScale *=
+                maximumFlowerHeadDiameter / currentDiameter;
+        }
+
+        private static bool IsFlowerSupportName(string objectName)
+        {
+            return objectName.Contains("Peduncle")
+                || objectName.Contains("Flower Stem")
+                || objectName.Contains("Back Stem")
+                || objectName.Contains("Stem Segment");
         }
 
         private static float MeasureFlowerSize(GameObject flower)
@@ -482,6 +578,11 @@ namespace ICI.PlantGrowth
 
             foreach (Renderer flowerRenderer in flower.GetComponentsInChildren<Renderer>(true))
             {
+                if (IsFlowerSupportName(flowerRenderer.name))
+                {
+                    continue;
+                }
+
                 if (!hasBounds)
                 {
                     bounds = flowerRenderer.bounds;
@@ -496,6 +597,77 @@ namespace ICI.PlantGrowth
             return hasBounds
                 ? Mathf.Max(bounds.size.x, bounds.size.y, bounds.size.z)
                 : 0f;
+        }
+
+        private static Material CreateStableMaterial(
+            string materialName,
+            Color color)
+        {
+            Shader shader = Shader.Find("HDRP/Unlit")
+                ?? Shader.Find("Universal Render Pipeline/Unlit")
+                ?? Shader.Find("Unlit/Color")
+                ?? Shader.Find("Standard");
+            Material material = new Material(shader)
+            {
+                name = materialName,
+                hideFlags = HideFlags.DontSave
+            };
+
+            if (material.HasProperty("_BaseColorMap"))
+            {
+                material.SetTexture("_BaseColorMap", Texture2D.whiteTexture);
+            }
+            if (material.HasProperty("_MainTex"))
+            {
+                material.SetTexture("_MainTex", Texture2D.whiteTexture);
+            }
+
+            SetMaterialColor(material, "_BaseColor", color);
+            SetMaterialColor(material, "_Color", color);
+            SetMaterialColor(material, "_UnlitColor", color);
+            SetMaterialFloat(material, "_CullMode", 0f);
+            SetMaterialFloat(material, "_CullModeForward", 0f);
+            SetMaterialFloat(material, "_DoubleSidedEnable", 1f);
+            SetMaterialFloat(material, "_Cull", 0f);
+            return material;
+        }
+
+        private static void SetMaterialColor(
+            Material material,
+            string propertyName,
+            Color color)
+        {
+            if (material.HasProperty(propertyName))
+            {
+                material.SetColor(propertyName, color);
+            }
+        }
+
+        private static void SetMaterialFloat(
+            Material material,
+            string propertyName,
+            float value)
+        {
+            if (material.HasProperty(propertyName))
+            {
+                material.SetFloat(propertyName, value);
+            }
+        }
+
+        private void OnDestroy()
+        {
+            if (petalMaterial != null)
+            {
+                Destroy(petalMaterial);
+            }
+            if (centerMaterial != null)
+            {
+                Destroy(centerMaterial);
+            }
+            if (bractMaterial != null)
+            {
+                Destroy(bractMaterial);
+            }
         }
 
         private bool HasAllFlowerPrefabs()
@@ -530,6 +702,9 @@ namespace ICI.PlantGrowth
             scaleMultiplier = Mathf.Max(1f, scaleMultiplier);
             growthStepsBeforeNextStage = Mathf.Max(1, growthStepsBeforeNextStage);
             flowerSizeMultiplier = Mathf.Max(0.1f, flowerSizeMultiplier);
+            maximumFlowerHeadDiameter = Mathf.Max(
+                0.1f,
+                maximumFlowerHeadDiameter);
             peduncleStemOverlap = Mathf.Max(0f, peduncleStemOverlap);
             peduncleBaseBandFraction = Mathf.Clamp(
                 peduncleBaseBandFraction,
