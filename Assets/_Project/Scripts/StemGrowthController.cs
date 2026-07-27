@@ -159,6 +159,14 @@ namespace ICI.PlantGrowth
         public bool IsFlowerComplete => flowerGrowthController != null
             && flowerGrowthController.IsComplete;
 
+        public void SetRuntimeBackdropVisible(bool visible)
+        {
+            if (activeBackdrop != null)
+            {
+                activeBackdrop.SetActive(showBackdrop && visible);
+            }
+        }
+
         public void SetAutomaticStart(bool enabled)
         {
             startAutomatically = enabled;

@@ -38,7 +38,7 @@ namespace ICI.PlantGrowth.MixedCrops
         private float sunflowerMatureHeightMeters = 2.35f;
         [SerializeField, Min(0.5f)]
         [Tooltip("Measured full height of the authored mature sunflower prefab before field scaling.")]
-        private float sunflowerAuthoredMatureHeightMeters = 5.65f;
+        private float sunflowerAuthoredMatureHeightMeters = 4.26f;
         [SerializeField, Min(0.5f)]
         [Tooltip("Target mature cassava canopy height in metres.")]
         private float cassavaMatureHeightMeters = 1.85f;
@@ -65,6 +65,14 @@ namespace ICI.PlantGrowth.MixedCrops
         public float CassavaCanopyProgress => cassavas.Count > 0 && cassavas[0] != null
             ? cassavas[0].CanopyProgress
             : 0f;
+        public float CassavaPlannedCanopyCoverageRatio =>
+            cassavas.Count > 0 && cassavas[0] != null
+                ? cassavas[0].PlannedCanopyCoverageRatio
+                : 0f;
+        public bool CassavaPlannedCanopyCoversSideAndTop =>
+            cassavas.Count > 0
+            && cassavas.TrueForAll(cassava => cassava != null
+                && cassava.PlannedCanopyCoversSideAndTop);
         public string CassavaGrowthStage => cassavas.Count > 0 && cassavas[0] != null
             ? cassavas[0].GrowthStageLabel
             : "Fără cassava în câmp";

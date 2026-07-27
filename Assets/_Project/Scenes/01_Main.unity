@@ -475,7 +475,7 @@ MonoBehaviour:
   staggerAlternateRows: 1
   localOrigin: {x: 0, y: 0, z: 0}
   sunflowerMatureHeightMeters: 2.35
-  sunflowerAuthoredMatureHeightMeters: 5.65
+  sunflowerAuthoredMatureHeightMeters: 4.26
   cassavaMatureHeightMeters: 1.85
 --- !u!1 &1597847153
 GameObject:
@@ -587,6 +587,9 @@ MonoBehaviour:
   lowerLeafSize: 0.82
   middleLeafSize: 1.12
   upperLeafSize: 0.7
+  maximumLeafWorldSize: 0.42
+  leafSurfaceColor: {r: 0.08, g: 0.42, b: 0.12, a: 1}
+  leafVeinColor: {r: 0.025, g: 0.18, b: 0.045, a: 1}
   maximumLeafCount: 12
   delayBetweenLeaves: 1
   leafGrowthDuration: 3
@@ -613,6 +616,10 @@ MonoBehaviour:
   scaleMultiplier: 1.2
   growthStepsBeforeNextStage: 3
   flowerSizeMultiplier: 1.5
+  maximumFlowerHeadDiameter: 0.45
+  petalColor: {r: 1, g: 0.62, b: 0.025, a: 1}
+  centerColor: {r: 0.12, g: 0.055, b: 0.015, a: 1}
+  bractColor: {r: 0.055, g: 0.28, b: 0.075, a: 1}
   peduncleStemOverlap: 0.015
   peduncleBaseBandFraction: 0.06
 --- !u!114 &1597847158

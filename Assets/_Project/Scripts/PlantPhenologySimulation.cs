@@ -156,6 +156,12 @@ namespace ICI.PlantGrowth.Phenology
         public float DailyMaintenanceRespirationPerPlantGrams =>
             ConvertKilogramsPerHectareToGramsPerPlant(dailyMaintenanceRespiration);
         public string StatusMessage => statusMessage;
+        public int RequestedSunflowerCount => requestedSunflowerCount;
+        public int RequestedCassavaCount => requestedCassavaCount;
+        public float SecondsPerSimulatedDay => secondsPerSimulatedDay;
+        public float VisualGrowthSpeed => visualGrowthSpeed;
+        public float EffectiveSimulationSpeed => GetEffectiveGrowthSpeed();
+        public float EffectiveVisualGrowthSpeed => GetEffectiveVisualGrowthSpeed();
 
         private void Awake()
         {
@@ -253,6 +259,69 @@ namespace ICI.PlantGrowth.Phenology
             statusMessage = "Simulare oprită.";
             stemGrowthController?.StopGrowth();
             mixedCropFieldController?.StopAllGrowth();
+        }
+
+        public void SetRuntimePanelVisible(bool visible)
+        {
+            showRuntimePanel = visible;
+        }
+
+        public void SetFieldConfiguration(
+            int sunflowerCount,
+            int cassavaCount)
+        {
+            requestedSunflowerCount = Mathf.Clamp(
+                sunflowerCount,
+                0,
+                MixedCropFieldController.MaxPlantsPerType);
+            requestedCassavaCount = Mathf.Clamp(
+                cassavaCount,
+                0,
+                MixedCropFieldController.MaxPlantsPerType);
+            ApplyFieldConfiguration();
+        }
+
+        public void SetEnvironmentParameters(
+            float minimumTemperature,
+            float maximumTemperature,
+            float dayLength,
+            float solarRadiation,
+            float availableSoilWater)
+        {
+            currentMinimumTemperature = Mathf.Clamp(
+                minimumTemperature,
+                MinimumTemperature,
+                MaximumTemperature);
+            currentMaximumTemperature = Mathf.Clamp(
+                maximumTemperature,
+                MinimumTemperature,
+                MaximumTemperature);
+            NormalizeTemperatureRange();
+            currentDayLength = Mathf.Clamp(
+                dayLength,
+                MinimumDayLength,
+                MaximumDayLength);
+            currentSolarRadiation = Mathf.Clamp(
+                solarRadiation,
+                MinimumSolarRadiation,
+                MaximumSolarRadiation);
+            soilWaterAvailability = Mathf.Clamp01(availableSoilWater);
+            RefreshLiveEnvironmentalPreview();
+        }
+
+        public void SetPlaybackParameters(
+            float requestedSecondsPerDay,
+            float requestedVisualGrowthSpeed)
+        {
+            secondsPerSimulatedDay = Mathf.Clamp(
+                requestedSecondsPerDay,
+                MinimumSecondsPerDay,
+                MaximumSecondsPerDay);
+            visualGrowthSpeed = Mathf.Clamp(
+                requestedVisualGrowthSpeed,
+                MinimumVisualGrowthSpeed,
+                MaximumVisualGrowthSpeed);
+            ApplyVisualGrowthSpeed(true);
         }
 
         private void AdvanceOneDay()
@@ -774,7 +843,7 @@ namespace ICI.PlantGrowth.Phenology
             GUI.enabled = true;
 
             GUILayout.Label(
-                "Space: start · WASD: mișcare · ↑/↓: vertical · click dreapta + mouse: privire",
+                "Space: start · M: setup nou/vechi · WASD: mișcare · ↑/↓: vertical · click dreapta + mouse: privire",
                 statusStyle);
             GUILayout.EndScrollView();
             GUILayout.EndArea();
