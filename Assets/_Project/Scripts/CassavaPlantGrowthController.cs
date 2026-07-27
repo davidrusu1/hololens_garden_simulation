@@ -6,9 +6,10 @@ using UnityEngine;
 namespace ICI.PlantGrowth.MixedCrops
 {
     /// <summary>
-    /// Lightweight visual cassava used by the mixed-crop field. The plant is
-    /// generated from primitives and follows cassava's characteristic three-way
-    /// forks and seven-lobed palmate leaves.
+    /// Procedural cassava whose architecture is driven by days after planting.
+    /// The same biological clock used by the sunflower simulation therefore
+    /// keeps cassava slower during establishment and growing after sunflower
+    /// physiological maturity.
     /// </summary>
     [DisallowMultipleComponent]
     public sealed class CassavaPlantGrowthController : MonoBehaviour
@@ -24,15 +25,37 @@ namespace ICI.PlantGrowth.MixedCrops
             public int Seed;
         }
 
+        private sealed class LeafVisual
+        {
+            public Transform Root;
+            public float FinalScale;
+            public float StartDay;
+            public float EndDay;
+        }
+
+        private sealed class BranchVisual
+        {
+            public BranchPlan Plan;
+            public Transform Root;
+            public Transform Stem;
+            public float StartDay;
+            public float EndDay;
+            public readonly List<LeafVisual> Leaves = new List<LeafVisual>();
+        }
+
         private const float GoldenAngle = 137.5f;
 
-        [Header("Playback")]
-        [SerializeField, Min(0f)] private float emergenceDelay = 1.25f;
-        [SerializeField, Min(0.1f)] private float mainStemGrowthDuration = 4.5f;
-        [SerializeField, Min(0.1f)] private float branchGrowthDuration = 3.1f;
-        [SerializeField, Min(0f)] private float delayBeforeForking = 0.55f;
-        [SerializeField, Min(0.1f)] private float leafGrowthDuration = 0.9f;
+        [Header("Biological calendar (days after planting)")]
+        [SerializeField, Min(0f)] private float emergenceDay = 8f;
+        [SerializeField, Min(1f)] private float firstForkDay = 45f;
+        [SerializeField, Min(1f)] private float secondForkDay = 90f;
+        [SerializeField, Min(1f)] private float fullCanopyDay = 150f;
+        [SerializeField, Min(1f)] private float harvestMaturityDay = 270f;
+        [SerializeField, Min(1f)] private float leafExpansionDays = 12f;
+
+        [Header("Standalone preview")]
         [SerializeField] private bool startAutomatically;
+        [SerializeField, Min(0.1f)] private float standaloneDaysPerSecond = 12f;
 
         [Header("Cassava architecture")]
         [SerializeField, Range(1, 2)] private int forkGenerations = 2;
@@ -57,20 +80,83 @@ namespace ICI.PlantGrowth.MixedCrops
         [SerializeField] private Color matureStemColor = new Color(0.42f, 0.3f, 0.13f, 1f);
         [SerializeField] private Color leafColor = new Color(0.09f, 0.64f, 0.17f, 1f);
 
+        private readonly List<BranchVisual> branchVisuals = new List<BranchVisual>();
         private Transform generatedPlant;
         private Material stemMaterial;
         private Material leafMaterial;
         private Mesh palmateLeafMesh;
-        private Coroutine growthRoutine;
-        private int activeBranches;
+        private Coroutine standaloneGrowthRoutine;
         private float playbackSpeed = 1f;
+        private float biologicalAgeDays;
 
-        public bool IsGrowing => growthRoutine != null || activeBranches > 0;
+        public bool IsGrowing => biologicalAgeDays >= emergenceDay
+            && biologicalAgeDays < fullCanopyDay;
+        public float BiologicalAgeDays => biologicalAgeDays;
+        public float FullCanopyDay => fullCanopyDay;
+        public float HarvestMaturityDay => harvestMaturityDay;
+        public float CanopyProgress => Mathf.InverseLerp(emergenceDay, fullCanopyDay, biologicalAgeDays);
+
+        /// <summary>
+        /// Nominal top height before the field-level metres calibration is
+        /// applied. Child branches use their vertical projection.
+        /// </summary>
+        public float EstimatedMatureHeightMeters
+        {
+            get
+            {
+                float height = mainStemLength;
+                float parentLength = mainStemLength;
+                if (forkGenerations >= 1)
+                {
+                    parentLength *= childLengthMultiplier;
+                    height += parentLength * Mathf.Cos(firstForkTilt * Mathf.Deg2Rad);
+                }
+
+                if (forkGenerations >= 2)
+                {
+                    parentLength *= childLengthMultiplier;
+                    height += parentLength * Mathf.Cos(secondForkTilt * Mathf.Deg2Rad);
+                }
+
+                return Mathf.Max(0.1f, height);
+            }
+        }
+
+        public string GrowthStageLabel
+        {
+            get
+            {
+                if (biologicalAgeDays < emergenceDay)
+                {
+                    return "Butaș plantat";
+                }
+                if (biologicalAgeDays < firstForkDay)
+                {
+                    return "Instalare și alungirea tulpinii";
+                }
+                if (biologicalAgeDays < secondForkDay)
+                {
+                    return "Prima ramificare";
+                }
+                if (biologicalAgeDays < fullCanopyDay)
+                {
+                    return "Dezvoltarea coroanei";
+                }
+                if (biologicalAgeDays < harvestMaturityDay)
+                {
+                    return "Coroană completă, rădăcini în îngroșare";
+                }
+
+                return "Maturitate de recoltare";
+            }
+        }
 
         private void Awake()
         {
+            NormalizeCalendar();
             PrepareSharedResources();
-            RecreateGeneratedPlantRoot();
+            RebuildArchitecture();
+            ApplyBiologicalAge();
         }
 
         private void Start()
@@ -93,6 +179,11 @@ namespace ICI.PlantGrowth.MixedCrops
             DestroyRuntimeObject(palmateLeafMesh);
         }
 
+        private void OnValidate()
+        {
+            NormalizeCalendar();
+        }
+
         public void SetAutomaticStart(bool enabled)
         {
             startAutomatically = enabled;
@@ -103,42 +194,73 @@ namespace ICI.PlantGrowth.MixedCrops
             playbackSpeed = Mathf.Max(0.1f, speedMultiplier);
         }
 
+        /// <summary>Used by the mixed field's shared day clock.</summary>
+        public void SetBiologicalAgeDays(float daysAfterPlanting)
+        {
+            StopStandaloneRoutine();
+            biologicalAgeDays = Mathf.Max(0f, daysAfterPlanting);
+            ApplyBiologicalAge();
+        }
+
+        /// <summary>Standalone preview for scenes without a phenology clock.</summary>
         public void StartGrowth()
         {
             ResetGrowth();
             if (isActiveAndEnabled)
             {
-                growthRoutine = StartCoroutine(RunGrowthSequence());
+                standaloneGrowthRoutine = StartCoroutine(RunStandaloneGrowth());
             }
         }
 
         public void StopGrowth()
         {
-            if (growthRoutine == null && activeBranches <= 0)
-            {
-                return;
-            }
-
-            StopAllCoroutines();
-            growthRoutine = null;
-            activeBranches = 0;
+            StopStandaloneRoutine();
         }
 
         public void ResetGrowth()
         {
-            StopAllCoroutines();
-            growthRoutine = null;
-            activeBranches = 0;
-            RecreateGeneratedPlantRoot();
+            StopStandaloneRoutine();
+            biologicalAgeDays = 0f;
+            ApplyBiologicalAge();
         }
 
         public void CompleteVisualMaturity()
         {
-            StopAllCoroutines();
-            growthRoutine = null;
-            activeBranches = 0;
+            SetBiologicalAgeDays(fullCanopyDay);
+        }
+
+        private IEnumerator RunStandaloneGrowth()
+        {
+            while (biologicalAgeDays < fullCanopyDay)
+            {
+                biologicalAgeDays += Time.deltaTime
+                    * playbackSpeed
+                    * standaloneDaysPerSecond;
+                ApplyBiologicalAge();
+                yield return null;
+            }
+
+            biologicalAgeDays = fullCanopyDay;
+            ApplyBiologicalAge();
+            standaloneGrowthRoutine = null;
+        }
+
+        private void StopStandaloneRoutine()
+        {
+            if (standaloneGrowthRoutine == null)
+            {
+                return;
+            }
+
+            StopCoroutine(standaloneGrowthRoutine);
+            standaloneGrowthRoutine = null;
+        }
+
+        private void RebuildArchitecture()
+        {
+            branchVisuals.Clear();
             RecreateGeneratedPlantRoot();
-            BuildMatureBranch(new BranchPlan
+            BuildBranchVisual(new BranchPlan
             {
                 Parent = generatedPlant,
                 LocalPosition = Vector3.zero,
@@ -150,96 +272,22 @@ namespace ICI.PlantGrowth.MixedCrops
             });
         }
 
-        private IEnumerator RunGrowthSequence()
-        {
-            yield return WaitForGrowthSeconds(emergenceDelay);
-            StartBranch(new BranchPlan
-            {
-                Parent = generatedPlant,
-                LocalPosition = Vector3.zero,
-                LocalRotation = Quaternion.identity,
-                Generation = 0,
-                Length = mainStemLength,
-                Radius = mainStemRadius,
-                Seed = randomSeed
-            });
-
-            while (activeBranches > 0)
-            {
-                yield return null;
-            }
-
-            growthRoutine = null;
-        }
-
-        private void StartBranch(BranchPlan plan)
-        {
-            activeBranches++;
-            StartCoroutine(GrowBranch(plan));
-        }
-
-        private IEnumerator GrowBranch(BranchPlan plan)
+        private void BuildBranchVisual(BranchPlan plan)
         {
             var random = new System.Random(plan.Seed);
             Transform branchRoot = CreateBranchRoot(plan);
-            GameObject stem = CreateStem(branchRoot, plan.Radius, 0.001f);
+            GameObject stemObject = CreateStem(branchRoot, plan.Radius, 0.001f);
+            GetGenerationWindow(plan.Generation, out float startDay, out float endDay);
 
-            int leafBudget = GetLeafBudget(plan.Generation);
-            float firstLeafFraction = plan.Generation == 0 ? 0.2f : 0.32f;
-            float lastLeafFraction = plan.Generation < forkGenerations ? 0.86f : 0.96f;
-            int nextLeaf = 0;
-            float duration = plan.Generation == 0
-                ? mainStemGrowthDuration
-                : branchGrowthDuration * Mathf.Pow(0.86f, plan.Generation - 1);
-            float elapsed = 0f;
-
-            while (elapsed < duration)
+            var visual = new BranchVisual
             {
-                elapsed += Time.deltaTime * playbackSpeed;
-                float progress = Mathf.Clamp01(elapsed / duration);
-                float smoothProgress = Mathf.SmoothStep(0f, 1f, progress);
-                SetStemLength(stem.transform, plan.Radius, plan.Length * smoothProgress);
-
-                while (nextLeaf < leafBudget)
-                {
-                    float fraction = leafBudget == 1
-                        ? lastLeafFraction
-                        : Mathf.Lerp(
-                            firstLeafFraction,
-                            lastLeafFraction,
-                            nextLeaf / (float)(leafBudget - 1));
-                    if (smoothProgress + 0.0001f < fraction)
-                    {
-                        break;
-                    }
-
-                    SpawnLeaf(
-                        branchRoot,
-                        plan.Length * fraction,
-                        CalculateLeafAzimuth(random, plan.Generation, nextLeaf),
-                        CalculateLeafScale(random, plan.Generation),
-                        true);
-                    nextLeaf++;
-                }
-
-                yield return null;
-            }
-
-            SetStemLength(stem.transform, plan.Radius, plan.Length);
-            if (plan.Generation < forkGenerations)
-            {
-                yield return WaitForGrowthSeconds(delayBeforeForking);
-                StartChildBranches(plan, branchRoot, random);
-            }
-
-            activeBranches--;
-        }
-
-        private void BuildMatureBranch(BranchPlan plan)
-        {
-            var random = new System.Random(plan.Seed);
-            Transform branchRoot = CreateBranchRoot(plan);
-            CreateStem(branchRoot, plan.Radius, plan.Length);
+                Plan = plan,
+                Root = branchRoot,
+                Stem = stemObject.transform,
+                StartDay = startDay,
+                EndDay = endDay
+            };
+            branchVisuals.Add(visual);
 
             int leafBudget = GetLeafBudget(plan.Generation);
             float firstLeafFraction = plan.Generation == 0 ? 0.2f : 0.32f;
@@ -252,12 +300,18 @@ namespace ICI.PlantGrowth.MixedCrops
                         firstLeafFraction,
                         lastLeafFraction,
                         leafIndex / (float)(leafBudget - 1));
-                SpawnLeaf(
+                float leafStartDay = Mathf.Lerp(startDay, endDay, fraction);
+                Transform leaf = CreateLeaf(
                     branchRoot,
                     plan.Length * fraction,
-                    CalculateLeafAzimuth(random, plan.Generation, leafIndex),
-                    CalculateLeafScale(random, plan.Generation),
-                    false);
+                    CalculateLeafAzimuth(random, plan.Generation, leafIndex));
+                visual.Leaves.Add(new LeafVisual
+                {
+                    Root = leaf,
+                    FinalScale = CalculateLeafScale(random, plan.Generation),
+                    StartDay = leafStartDay,
+                    EndDay = Mathf.Min(endDay + leafExpansionDays, leafStartDay + leafExpansionDays)
+                });
             }
 
             if (plan.Generation >= forkGenerations)
@@ -267,7 +321,62 @@ namespace ICI.PlantGrowth.MixedCrops
 
             foreach (BranchPlan child in CreateChildPlans(plan, branchRoot, random))
             {
-                BuildMatureBranch(child);
+                BuildBranchVisual(child);
+            }
+        }
+
+        private void ApplyBiologicalAge()
+        {
+            foreach (BranchVisual visual in branchVisuals)
+            {
+                float branchProgress = SmoothProgress(
+                    visual.StartDay,
+                    visual.EndDay,
+                    biologicalAgeDays);
+                bool visible = branchProgress > 0.0001f;
+                visual.Root.gameObject.SetActive(visible);
+                if (!visible)
+                {
+                    continue;
+                }
+
+                float currentRadius = visual.Plan.Radius * Mathf.Lerp(0.52f, 1f, branchProgress);
+                SetStemLength(
+                    visual.Stem,
+                    currentRadius,
+                    visual.Plan.Length * branchProgress);
+
+                foreach (LeafVisual leaf in visual.Leaves)
+                {
+                    float leafProgress = SmoothProgress(
+                        leaf.StartDay,
+                        leaf.EndDay,
+                        biologicalAgeDays);
+                    leaf.Root.gameObject.SetActive(leafProgress > 0.0001f);
+                    leaf.Root.localScale = Vector3.one * leaf.FinalScale * leafProgress;
+                }
+            }
+
+            float maturityProgress = SmoothProgress(emergenceDay, fullCanopyDay, biologicalAgeDays);
+            SetMaterialColor(stemMaterial, Color.Lerp(youngStemColor, matureStemColor, maturityProgress));
+        }
+
+        private void GetGenerationWindow(int generation, out float startDay, out float endDay)
+        {
+            if (generation <= 0)
+            {
+                startDay = emergenceDay;
+                endDay = firstForkDay;
+            }
+            else if (generation == 1)
+            {
+                startDay = firstForkDay;
+                endDay = secondForkDay;
+            }
+            else
+            {
+                startDay = secondForkDay;
+                endDay = fullCanopyDay;
             }
         }
 
@@ -297,14 +406,6 @@ namespace ICI.PlantGrowth.MixedCrops
             float visibleLength = Mathf.Max(0.001f, length);
             stem.localScale = new Vector3(radius, visibleLength * 0.5f, radius);
             stem.localPosition = Vector3.up * (visibleLength * 0.5f);
-        }
-
-        private void StartChildBranches(BranchPlan parent, Transform branchRoot, System.Random random)
-        {
-            foreach (BranchPlan child in CreateChildPlans(parent, branchRoot, random))
-            {
-                StartBranch(child);
-            }
         }
 
         private IEnumerable<BranchPlan> CreateChildPlans(
@@ -360,12 +461,7 @@ namespace ICI.PlantGrowth.MixedCrops
             return NextFloat(random, 0.88f, 1.08f) * Mathf.Pow(0.92f, generation);
         }
 
-        private void SpawnLeaf(
-            Transform branch,
-            float height,
-            float azimuth,
-            float size,
-            bool animate)
+        private Transform CreateLeaf(Transform branch, float height, float azimuth)
         {
             var leafRootObject = new GameObject("Palmate Cassava Leaf");
             Transform leafRoot = leafRootObject.transform;
@@ -379,10 +475,7 @@ namespace ICI.PlantGrowth.MixedCrops
             petiole.transform.SetParent(leafRoot, false);
             petiole.transform.localPosition = Vector3.right * (petioleLength * 0.5f);
             petiole.transform.localRotation = Quaternion.Euler(0f, 0f, -90f);
-            petiole.transform.localScale = new Vector3(
-                0.008f,
-                petioleLength * 0.5f,
-                0.008f);
+            petiole.transform.localScale = new Vector3(0.008f, petioleLength * 0.5f, 0.008f);
             petiole.GetComponent<Renderer>().sharedMaterial = stemMaterial;
             RemoveCollider(petiole);
 
@@ -390,60 +483,22 @@ namespace ICI.PlantGrowth.MixedCrops
             blade.transform.SetParent(leafRoot, false);
             blade.AddComponent<MeshFilter>().sharedMesh = palmateLeafMesh;
             blade.AddComponent<MeshRenderer>().sharedMaterial = leafMaterial;
-
-            if (animate)
-            {
-                leafRoot.localScale = Vector3.zero;
-                StartCoroutine(GrowLeaf(leafRoot, size));
-            }
-            else
-            {
-                leafRoot.localScale = Vector3.one * size;
-            }
-        }
-
-        private IEnumerator GrowLeaf(Transform leaf, float finalScale)
-        {
-            float elapsed = 0f;
-            while (elapsed < leafGrowthDuration)
-            {
-                elapsed += Time.deltaTime * playbackSpeed;
-                float progress = Mathf.SmoothStep(0f, 1f, Mathf.Clamp01(elapsed / leafGrowthDuration));
-                leaf.localScale = Vector3.one * (finalScale * progress);
-                yield return null;
-            }
-
-            leaf.localScale = Vector3.one * finalScale;
-        }
-
-        private IEnumerator WaitForGrowthSeconds(float seconds)
-        {
-            float elapsed = 0f;
-            while (elapsed < seconds)
-            {
-                elapsed += Time.deltaTime * playbackSpeed;
-                yield return null;
-            }
+            leafRoot.localScale = Vector3.zero;
+            return leafRoot;
         }
 
         private void PrepareSharedResources()
         {
-            Shader shader = Shader.Find("HDRP/Lit");
-            if (shader == null)
-            {
-                shader = Shader.Find("Universal Render Pipeline/Lit");
-            }
-            if (shader == null)
-            {
-                shader = Shader.Find("Standard");
-            }
+            Shader shader = Shader.Find("HDRP/Lit")
+                ?? Shader.Find("Universal Render Pipeline/Lit")
+                ?? Shader.Find("Standard");
 
             stemMaterial = new Material(shader)
             {
                 name = "Cassava Runtime Stem Material",
                 hideFlags = HideFlags.DontSave
             };
-            SetMaterialColor(stemMaterial, Color.Lerp(youngStemColor, matureStemColor, 0.55f));
+            SetMaterialColor(stemMaterial, youngStemColor);
 
             leafMaterial = new Material(shader)
             {
@@ -525,8 +580,27 @@ namespace ICI.PlantGrowth.MixedCrops
             generatedPlant.SetParent(transform, false);
         }
 
+        private void NormalizeCalendar()
+        {
+            emergenceDay = Mathf.Max(0f, emergenceDay);
+            firstForkDay = Mathf.Max(emergenceDay + 1f, firstForkDay);
+            secondForkDay = Mathf.Max(firstForkDay + 1f, secondForkDay);
+            fullCanopyDay = Mathf.Max(secondForkDay + 1f, fullCanopyDay);
+            harvestMaturityDay = Mathf.Max(fullCanopyDay + 1f, harvestMaturityDay);
+            leafExpansionDays = Mathf.Max(1f, leafExpansionDays);
+        }
+
+        private static float SmoothProgress(float start, float end, float value)
+        {
+            return Mathf.SmoothStep(0f, 1f, Mathf.InverseLerp(start, end, value));
+        }
+
         private static void SetMaterialColor(Material material, Color color)
         {
+            if (material == null)
+            {
+                return;
+            }
             if (material.HasProperty("_BaseColor"))
             {
                 material.SetColor("_BaseColor", color);

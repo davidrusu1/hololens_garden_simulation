@@ -75,7 +75,12 @@ namespace ICI.PlantGrowth.Phenology
 
         [SerializeField, Min(0.1f)]
         [Tooltip("Calibration between real-time prefab animation and biological time. It does not change simulated days or crop calculations.")]
-        private float visualMorphologySpeedFactor = 3f;
+        private float visualMorphologySpeedFactor = 2f;
+
+        [Header("WOFOST biomass conversion")]
+        [SerializeField, Min(1f)]
+        [Tooltip("Sunflower stand density used only to convert WOFOST kg/ha values into grams of dry matter per plant.")]
+        private float sunflowerPlantDensityPerHectare = 50000f;
 
         [Header("Runtime panel")]
         [SerializeField]
@@ -132,6 +137,24 @@ namespace ICI.PlantGrowth.Phenology
         public float StorageDryMatter => storageDryMatter;
         public float LeafAreaIndex => leafAreaIndex;
         public float DailyNetDryMatterGrowth => dailyNetDryMatterGrowth;
+        public float SunflowerPlantDensityPerHectare =>
+            sunflowerPlantDensityPerHectare;
+        public float TotalDryMatterPerPlantGrams =>
+            ConvertKilogramsPerHectareToGramsPerPlant(totalDryMatter);
+        public float RootDryMatterPerPlantGrams =>
+            ConvertKilogramsPerHectareToGramsPerPlant(rootDryMatter);
+        public float StemDryMatterPerPlantGrams =>
+            ConvertKilogramsPerHectareToGramsPerPlant(stemDryMatter);
+        public float LeafDryMatterPerPlantGrams =>
+            ConvertKilogramsPerHectareToGramsPerPlant(leafDryMatter);
+        public float StorageDryMatterPerPlantGrams =>
+            ConvertKilogramsPerHectareToGramsPerPlant(storageDryMatter);
+        public float DailyNetDryMatterGrowthPerPlantGrams =>
+            ConvertKilogramsPerHectareToGramsPerPlant(dailyNetDryMatterGrowth);
+        public float DailyGrossAssimilationPerPlantGrams =>
+            ConvertKilogramsPerHectareToGramsPerPlant(dailyGrossAssimilation);
+        public float DailyMaintenanceRespirationPerPlantGrams =>
+            ConvertKilogramsPerHectareToGramsPerPlant(dailyMaintenanceRespiration);
         public string StatusMessage => statusMessage;
 
         private void Awake()
@@ -168,7 +191,11 @@ namespace ICI.PlantGrowth.Phenology
             // environmental inputs, so the final day and phenological values
             // are independent of either playback control.
             float effectiveSimulationSpeed = GetEffectiveGrowthSpeed();
-            dayTimer += Time.unscaledDeltaTime * effectiveSimulationSpeed;
+            // Editor shader compilation or a suspended application can produce
+            // a very large first-frame delta. Clamp it so biological time never
+            // jumps hundreds of days after a rendering stall.
+            float stableFrameDelta = Mathf.Min(Time.unscaledDeltaTime, 0.1f);
+            dayTimer += stableFrameDelta * effectiveSimulationSpeed;
             float dayDuration = ReferenceSecondsPerSimulatedDay;
 
             // The guard avoids a long frame if the speed slider is changed abruptly.
@@ -184,6 +211,13 @@ namespace ICI.PlantGrowth.Phenology
                     break;
                 }
             }
+
+            // Cassava uses the same continuously advancing day as sunflower.
+            // The fractional part prevents visible jumps between simulated days.
+            mixedCropFieldController?.SetSimulationDay(
+                currentDay + dayTimer / dayDuration);
+            ApplyVisualDevelopmentStage(
+                GetInterpolatedVisualDevelopmentStage(dayDuration));
         }
 
         public void StartSimulation()
@@ -202,6 +236,8 @@ namespace ICI.PlantGrowth.Phenology
             ResetVisualPlant();
             ResetNumericalState();
             isRunning = true;
+            mixedCropFieldController?.SetSimulationDay(currentDay);
+            ApplyVisualDevelopmentStage(currentDevelopmentStage);
             statusMessage = "Semănată — se acumulează temperatura pentru răsărire.";
 
             Debug.Log(
@@ -223,6 +259,7 @@ namespace ICI.PlantGrowth.Phenology
         {
             RefreshAverageTemperature();
             currentDay++;
+            mixedCropFieldController?.SetSimulationDay(currentDay);
 
             // Maturity stops biological development, not the calendar. Keep
             // counting simulated days while preserving every terminal value.
@@ -250,14 +287,7 @@ namespace ICI.PlantGrowth.Phenology
                 hasEmerged = true;
                 InitializeCropGrowthState();
                 statusMessage = "Răsărită — începe creșterea vizuală.";
-                if (mixedCropFieldController != null)
-                {
-                    mixedCropFieldController.StartAllGrowth();
-                }
-                else
-                {
-                    stemGrowthController?.StartGrowth();
-                }
+                ApplyVisualDevelopmentStage(currentDevelopmentStage);
 
                 Debug.Log(
                     $"[{nameof(PlantPhenologySimulation)}] {profile.PlantName} emerged on day {currentDay}.",
@@ -294,20 +324,13 @@ namespace ICI.PlantGrowth.Phenology
                 currentDevelopmentStage + currentDevelopmentRate);
 
             AdvanceCropGrowth();
+            ApplyVisualDevelopmentStage(currentDevelopmentStage);
 
             if (!hasFlowered && currentDevelopmentStage >= 1f)
             {
                 hasFlowered = true;
                 currentTemperatureSum = 0f;
                 statusMessage = "Înflorire — DVS a ajuns la 1.";
-                if (mixedCropFieldController != null)
-                {
-                    mixedCropFieldController.NotifyFloweringStarted();
-                }
-                else
-                {
-                    stemGrowthController?.NotifyFloweringStarted();
-                }
                 Debug.Log(
                     $"[{nameof(PlantPhenologySimulation)}] {profile.PlantName} reached flowering on day {currentDay}.",
                     this);
@@ -325,14 +348,7 @@ namespace ICI.PlantGrowth.Phenology
                 hasMatured = true;
                 currentDevelopmentStage = profile.FinalDevelopmentStage;
                 statusMessage = "Maturitate atinsă — numărătoarea zilelor continuă.";
-                if (mixedCropFieldController != null)
-                {
-                    mixedCropFieldController.CompleteVisualMaturity();
-                }
-                else
-                {
-                    stemGrowthController?.CompleteVisualMaturity();
-                }
+                ApplyVisualDevelopmentStage(currentDevelopmentStage);
                 Debug.Log(
                     $"[{nameof(PlantPhenologySimulation)}] {profile.PlantName} reached maturity on day {currentDay}.",
                     this);
@@ -367,13 +383,12 @@ namespace ICI.PlantGrowth.Phenology
 
         private void PrepareVisualGrowthController()
         {
-            if (stemGrowthController == null)
+            if (stemGrowthController != null)
             {
-                return;
+                stemGrowthController.SetAutomaticStart(false);
+                stemGrowthController.StopGrowth();
             }
 
-            stemGrowthController.SetAutomaticStart(false);
-            stemGrowthController.StopGrowth();
             ApplyVisualGrowthSpeed(true);
 
             if (mixedCropFieldController != null)
@@ -384,15 +399,16 @@ namespace ICI.PlantGrowth.Phenology
 
         private void ResetVisualPlant()
         {
-            if (stemGrowthController == null)
+            if (stemGrowthController != null)
             {
-                return;
+                stemGrowthController.SetAutomaticStart(false);
+                stemGrowthController.SetStage(1);
+                stemGrowthController.StopGrowth();
             }
 
-            stemGrowthController.SetAutomaticStart(false);
-            stemGrowthController.SetStage(1);
-            stemGrowthController.StopGrowth();
             mixedCropFieldController?.ResetAllGrowth();
+            mixedCropFieldController?.SetSimulationDay(0f);
+            ApplyVisualDevelopmentStage(-0.1f);
         }
 
         private void ApplyFieldConfiguration()
@@ -415,19 +431,9 @@ namespace ICI.PlantGrowth.Phenology
                 requestedSunflowerCount,
                 requestedCassavaCount);
             mixedCropFieldController.SetSimulationSpeed(GetEffectiveVisualGrowthSpeed());
-
-            if (hasMatured)
-            {
-                mixedCropFieldController.CompleteVisualMaturity();
-            }
-            else if (hasEmerged)
-            {
-                mixedCropFieldController.StartAllGrowth();
-                if (hasFlowered)
-                {
-                    mixedCropFieldController.NotifyFloweringStarted();
-                }
-            }
+            mixedCropFieldController.SetSimulationDay(currentDay);
+            mixedCropFieldController.SetSunflowerDevelopmentStage(
+                currentDevelopmentStage);
         }
 
         private void ResetNumericalState()
@@ -543,6 +549,37 @@ namespace ICI.PlantGrowth.Phenology
             return GetEffectiveGrowthSpeed() * Mathf.Max(0.1f, visualMorphologySpeedFactor);
         }
 
+        private float GetInterpolatedVisualDevelopmentStage(float dayDuration)
+        {
+            if (currentDevelopmentStage < 0f || profile == null)
+            {
+                return currentDevelopmentStage;
+            }
+
+            if (hasMatured)
+            {
+                return profile.FinalDevelopmentStage;
+            }
+
+            float fractionOfDay = Mathf.Clamp01(
+                dayTimer / Mathf.Max(0.0001f, dayDuration));
+            return Mathf.Min(
+                profile.FinalDevelopmentStage,
+                currentDevelopmentStage + currentDevelopmentRate * fractionOfDay);
+        }
+
+        private void ApplyVisualDevelopmentStage(float developmentStage)
+        {
+            if (mixedCropFieldController != null)
+            {
+                mixedCropFieldController.SetSunflowerDevelopmentStage(
+                    developmentStage);
+                return;
+            }
+
+            stemGrowthController?.SetDevelopmentStage(developmentStage);
+        }
+
         private void OnGUI()
         {
             if (!showRuntimePanel)
@@ -651,7 +688,8 @@ namespace ICI.PlantGrowth.Phenology
             ApplyVisualGrowthSpeed();
             RefreshLiveEnvironmentalPreview();
             GUILayout.Label(
-                $"Viteză calendar: {GetEffectiveGrowthSpeed():0.00}x   Morfologie: {GetEffectiveVisualGrowthSpeed():0.00}x",
+                $"Viteză calendar: {GetEffectiveGrowthSpeed():0.00}x   "
+                + "Morfologie floarea-soarelui: controlată de DVS",
                 valueStyle);
 
             GUILayout.Space(8f);
@@ -672,19 +710,55 @@ namespace ICI.PlantGrowth.Phenology
                 $"Factor zi: {dayLengthFactor:0.00}   Factor vernalizare: {vernalizationFactor:0.00}",
                 statusStyle);
             GUILayout.Space(4f);
-            GUILayout.Label("CREȘTERE WOFOST-LITE", sectionStyle);
+            GUILayout.Label("CALENDAR COMPARATIV", sectionStyle);
+            GUILayout.Label(
+                $"Floarea-soarelui: {GetSunflowerGrowthStageLabel()}",
+                valueStyle);
+            GUILayout.Label(
+                $"Cassava: {mixedCropFieldController?.CassavaGrowthStage ?? "Fără cassava în câmp"}",
+                valueStyle);
+            if (mixedCropFieldController != null)
+            {
+                GUILayout.Label(
+                    $"Înălțime matură: floarea-soarelui {mixedCropFieldController.SunflowerMatureHeightMeters:0.00} m · "
+                    + $"cassava {mixedCropFieldController.CassavaMatureHeightMeters:0.00} m",
+                    statusStyle);
+                GUILayout.Label(
+                    $"Coroană cassava: {mixedCropFieldController.CassavaCanopyProgress * 100f:0}% · "
+                    + "completă aproximativ în ziua 150 · recoltare aproximativ în ziua 270",
+                    statusStyle);
+            }
+            GUILayout.Space(4f);
+            GUILayout.Label(
+                "CREȘTERE WOFOST-LITE — FLOAREA-SOARELUI",
+                sectionStyle);
             GUILayout.BeginHorizontal();
-            GUILayout.Label($"Biomasă: {totalDryMatter:0} kg/ha", valueStyle);
+            GUILayout.Label(
+                $"Biomasă: {TotalDryMatterPerPlantGrams:0.0} g SU/plantă",
+                valueStyle);
             GUILayout.Label($"LAI: {leafAreaIndex:0.00}", valueStyle);
             GUILayout.EndHorizontal();
             GUILayout.Label(
-                $"Rădăcină {rootDryMatter:0} · Tulpină {stemDryMatter:0} · Frunze {leafDryMatter:0} · Floare/semințe {storageDryMatter:0} kg/ha",
+                $"Rădăcină {RootDryMatterPerPlantGrams:0.0} · "
+                + $"Tulpină {StemDryMatterPerPlantGrams:0.0} · "
+                + $"Frunze {LeafDryMatterPerPlantGrams:0.0} · "
+                + $"Floare/semințe {StorageDryMatterPerPlantGrams:0.0} g SU/plantă",
                 statusStyle);
             GUILayout.Label(
-                $"Creștere netă: {dailyNetDryMatterGrowth:0.0} kg/ha/zi · Lumină interceptată: {interceptedRadiationFraction * 100f:0}%",
+                $"Creștere netă: {DailyNetDryMatterGrowthPerPlantGrams:0.00} "
+                + $"g SU/plantă/zi · Lumină interceptată: "
+                + $"{interceptedRadiationFraction * 100f:0}%",
                 statusStyle);
             GUILayout.Label(
-                $"Asimilație: {dailyGrossAssimilation:0.0} · Respirație: {dailyMaintenanceRespiration:0.0} · Factor T: {temperatureAssimilationFactor:0.00} · Apă: {waterStressFactor:0.00}",
+                $"Asimilație: {DailyGrossAssimilationPerPlantGrams:0.00} "
+                + $"g/plantă/zi · Respirație: "
+                + $"{DailyMaintenanceRespirationPerPlantGrams:0.00} "
+                + $"g/plantă/zi · Factor T: {temperatureAssimilationFactor:0.00} "
+                + $"· Apă: {waterStressFactor:0.00}",
+                statusStyle);
+            GUILayout.Label(
+                $"Conversie WOFOST: {sunflowerPlantDensityPerHectare:0} "
+                + "plante/ha · SU = substanță uscată",
                 statusStyle);
             GUILayout.Label(
                 "Valorile se aplică în timp real simulării și animațiilor aflate deja în curs.",
@@ -706,6 +780,24 @@ namespace ICI.PlantGrowth.Phenology
             GUILayout.EndArea();
 
             GUI.matrix = previousMatrix;
+        }
+
+        private string GetSunflowerGrowthStageLabel()
+        {
+            if (!hasEmerged)
+            {
+                return "Semănată / acumulare termică";
+            }
+            if (!hasFlowered)
+            {
+                return "Creștere vegetativă";
+            }
+            if (!hasMatured)
+            {
+                return "Înflorire și umplerea semințelor";
+            }
+
+            return "Maturitate fiziologică";
         }
 
         private float DrawSlider(
@@ -838,6 +930,9 @@ namespace ICI.PlantGrowth.Phenology
                 MinimumVisualGrowthSpeed,
                 MaximumVisualGrowthSpeed);
             visualMorphologySpeedFactor = Mathf.Max(0.1f, visualMorphologySpeedFactor);
+            sunflowerPlantDensityPerHectare = Mathf.Max(
+                1f,
+                sunflowerPlantDensityPerHectare);
             currentSolarRadiation = Mathf.Clamp(
                 currentSolarRadiation,
                 MinimumSolarRadiation,
@@ -851,6 +946,14 @@ namespace ICI.PlantGrowth.Phenology
                 requestedCassavaCount,
                 0,
                 MixedCropFieldController.MaxPlantsPerType);
+        }
+
+        private float ConvertKilogramsPerHectareToGramsPerPlant(
+            float kilogramsPerHectare)
+        {
+            return Mathf.Max(0f, kilogramsPerHectare)
+                * 1000f
+                / Mathf.Max(1f, sunflowerPlantDensityPerHectare);
         }
 
         private void NormalizeTemperatureRange()

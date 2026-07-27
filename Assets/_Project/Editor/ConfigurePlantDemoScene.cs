@@ -156,6 +156,7 @@ namespace ICI.PlantGrowth.Editor
             serializedController.FindProperty("stackedStemOverlap").floatValue = 0.015f;
             serializedController.FindProperty("startAutomatically").boolValue = false;
             serializedController.FindProperty("simulationSpeedMultiplier").floatValue = 1f;
+            serializedController.FindProperty("flowerGrowthSpeedRatio").floatValue = 0.3f;
             serializedController.FindProperty("leafGrowthController").objectReferenceValue = leafController;
             serializedController.FindProperty("flowerGrowthController").objectReferenceValue = flowerController;
 
@@ -279,12 +280,13 @@ namespace ICI.PlantGrowth.Editor
                 sunflowerVisualPrefab;
             serializedField.FindProperty("sunflowerCount").intValue = 3;
             serializedField.FindProperty("cassavaCount").intValue = 3;
-            serializedField.FindProperty("horizontalSpacing").floatValue = 1.25f;
-            serializedField.FindProperty("rowSpacing").floatValue = 1.3f;
+            serializedField.FindProperty("horizontalSpacing").floatValue = 1.45f;
+            serializedField.FindProperty("rowSpacing").floatValue = 1.55f;
             serializedField.FindProperty("staggerAlternateRows").boolValue = true;
             serializedField.FindProperty("localOrigin").vector3Value = Vector3.zero;
-            serializedField.FindProperty("sunflowerScale").floatValue = 0.72f;
-            serializedField.FindProperty("cassavaScale").floatValue = 1f;
+            serializedField.FindProperty("sunflowerMatureHeightMeters").floatValue = 2.35f;
+            serializedField.FindProperty("sunflowerAuthoredMatureHeightMeters").floatValue = 5.65f;
+            serializedField.FindProperty("cassavaMatureHeightMeters").floatValue = 1.85f;
             serializedField.ApplyModifiedPropertiesWithoutUndo();
             EditorUtility.SetDirty(field);
             return field;
@@ -318,7 +320,9 @@ namespace ICI.PlantGrowth.Editor
             serializedSimulation.FindProperty("soilWaterAvailability").floatValue = 1f;
             serializedSimulation.FindProperty("secondsPerSimulatedDay").floatValue = 0.5f;
             serializedSimulation.FindProperty("visualGrowthSpeed").floatValue = 1f;
-            serializedSimulation.FindProperty("visualMorphologySpeedFactor").floatValue = 3f;
+            serializedSimulation.FindProperty("visualMorphologySpeedFactor").floatValue = 2f;
+            serializedSimulation.FindProperty("sunflowerPlantDensityPerHectare").floatValue =
+                50000f;
             serializedSimulation.FindProperty("showRuntimePanel").boolValue = true;
             serializedSimulation.ApplyModifiedPropertiesWithoutUndo();
             EditorUtility.SetDirty(simulation);

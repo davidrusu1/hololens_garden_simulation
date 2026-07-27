@@ -14,6 +14,7 @@ namespace ICI.PlantGrowth
     public sealed class StemGrowthController : MonoBehaviour
     {
         private const int TerminalStage = 4;
+        private const float VegetativeDvsStep = 1f / 18f;
 
         [Header("AR anchor")]
         [SerializeField]
@@ -109,6 +110,10 @@ namespace ICI.PlantGrowth
         [Tooltip("Runtime speed applied to stem, leaf and flower animation delays.")]
         private float simulationSpeedMultiplier = 1f;
 
+        [SerializeField, Range(0.05f, 1f)]
+        [Tooltip("Keeps flower expansion active from DVS 1 until close to DVS 2 instead of completing immediately after flowering starts.")]
+        private float flowerGrowthSpeedRatio = 0.3f;
+
         [Header("Leaves")]
         [SerializeField]
         private LeafGrowthController leafGrowthController;
@@ -136,11 +141,23 @@ namespace ICI.PlantGrowth
         private bool plantDimensionsReady;
         private float flowerSupportHeight;
         private float flowerSupportThickness;
+        private bool developmentStageDriven;
+        private float currentDevelopmentStage = -0.1f;
+        private float nextVegetativeDvsThreshold;
+        private bool leavesSpawnedForActiveStem;
 
         public int CurrentStage { get; private set; }
         public GameObject ActiveStem => activeStem;
         public GameObject ActiveArucoAnchor => activeArucoAnchor;
-        public bool IsGrowing => growthRoutine != null;
+        public bool IsGrowing => developmentStageDriven
+            ? currentDevelopmentStage >= 0f && currentDevelopmentStage < 1f
+            : growthRoutine != null;
+        public float CurrentDevelopmentStage => currentDevelopmentStage;
+        public bool HasReachedMatureStemDimensions => plantDimensionsReady;
+        public bool HasFlowerStarted => flowerGrowthController != null
+            && flowerGrowthController.HasStarted;
+        public bool IsFlowerComplete => flowerGrowthController != null
+            && flowerGrowthController.IsComplete;
 
         public void SetAutomaticStart(bool enabled)
         {
@@ -151,7 +168,63 @@ namespace ICI.PlantGrowth
         {
             simulationSpeedMultiplier = Mathf.Max(0.1f, speedMultiplier);
             leafGrowthController?.SetSimulationSpeed(simulationSpeedMultiplier);
-            flowerGrowthController?.SetSimulationSpeed(simulationSpeedMultiplier);
+            flowerGrowthController?.SetSimulationSpeed(
+                simulationSpeedMultiplier * flowerGrowthSpeedRatio);
+        }
+
+        /// <summary>
+        /// Makes DVS the visual clock. DVS below zero is pre-emergence,
+        /// DVS 0..1 drives stem and leaves, and DVS 1..2 drives the flower.
+        /// Reapplying the same DVS never advances the plant.
+        /// </summary>
+        public void SetDevelopmentStage(float developmentStage)
+        {
+            developmentStageDriven = true;
+            float clampedDevelopmentStage = Mathf.Clamp(
+                developmentStage,
+                -0.1f,
+                2f);
+
+            if (clampedDevelopmentStage < 0f)
+            {
+                bool needsReset = currentDevelopmentStage >= 0f
+                    || activeStem != null
+                    || completedStems.Count > 0
+                    || plantDimensionsReady;
+                currentDevelopmentStage = clampedDevelopmentStage;
+                nextVegetativeDvsThreshold = 0f;
+                if (needsReset)
+                {
+                    SetStage(1);
+                }
+
+                floweringAuthorized = false;
+                maturityRequested = false;
+                leafGrowthController?.SetDevelopmentStage(
+                    currentDevelopmentStage);
+                flowerGrowthController?.SetDevelopmentStage(
+                    currentDevelopmentStage,
+                    0f,
+                    0f);
+                return;
+            }
+
+            currentDevelopmentStage = clampedDevelopmentStage;
+            leafGrowthController?.SetDevelopmentStage(currentDevelopmentStage);
+
+            if (currentDevelopmentStage < 1f)
+            {
+                floweringAuthorized = false;
+                maturityRequested = false;
+                StopGrowth();
+                AdvanceStemToCurrentDevelopmentStage();
+                return;
+            }
+
+            floweringAuthorized = true;
+            maturityRequested = currentDevelopmentStage >= 2f;
+            CompleteStemImmediately();
+            SynchronizeFlowerWithPhenology();
         }
 
         /// <summary>
@@ -161,6 +234,12 @@ namespace ICI.PlantGrowth
         /// </summary>
         public void NotifyFloweringStarted()
         {
+            if (developmentStageDriven)
+            {
+                SetDevelopmentStage(Mathf.Max(1f, currentDevelopmentStage));
+                return;
+            }
+
             floweringAuthorized = true;
             SynchronizeFlowerWithPhenology();
         }
@@ -171,6 +250,12 @@ namespace ICI.PlantGrowth
         /// </summary>
         public void CompleteVisualMaturity()
         {
+            if (developmentStageDriven)
+            {
+                SetDevelopmentStage(2f);
+                return;
+            }
+
             floweringAuthorized = true;
             maturityRequested = true;
             leafGrowthController?.CompleteGrowthImmediately();
@@ -204,7 +289,8 @@ namespace ICI.PlantGrowth
             {
                 Transform flowerParent = modelContainer != null ? modelContainer : transform;
                 flowerGrowthController.Initialize(flowerParent);
-                flowerGrowthController.SetSimulationSpeed(simulationSpeedMultiplier);
+                flowerGrowthController.SetSimulationSpeed(
+                    simulationSpeedMultiplier * flowerGrowthSpeedRatio);
             }
         }
 
@@ -291,6 +377,8 @@ namespace ICI.PlantGrowth
             plantDimensionsReady = false;
             flowerSupportHeight = 0f;
             flowerSupportThickness = 0f;
+            nextVegetativeDvsThreshold = 0f;
+            leavesSpawnedForActiveStem = false;
             ClearAllStems();
             leafGrowthController?.ResetLeaves();
             flowerGrowthController?.ResetFlower();
@@ -403,6 +491,224 @@ namespace ICI.PlantGrowth
             growthRoutine = null;
         }
 
+        private void AdvanceStemToCurrentDevelopmentStage()
+        {
+            const int safetyLimit = 64;
+            int safety = 0;
+            while (nextVegetativeDvsThreshold
+                    <= currentDevelopmentStage + 0.0001f
+                && currentDevelopmentStage < 1f
+                && safety++ < safetyLimit)
+            {
+                AdvanceOneVegetativeDvsEvent();
+                nextVegetativeDvsThreshold += VegetativeDvsStep;
+            }
+
+            leafGrowthController?.SetDevelopmentStage(currentDevelopmentStage);
+        }
+
+        private void AdvanceOneVegetativeDvsEvent()
+        {
+            if (!stemHasAppeared)
+            {
+                ShowStage(CurrentStage);
+                stemHasAppeared = activeStem != null;
+                return;
+            }
+
+            if (activeStem == null)
+            {
+                return;
+            }
+
+            if (CurrentStage < TerminalStage)
+            {
+                GrowActiveStemBiologically();
+                SynchronizePlantThicknessWithHeight();
+                growthStep++;
+
+                if (growthStep < growthStepsBeforeNextStage)
+                {
+                    return;
+                }
+
+                int nextStage = CurrentStage + 1;
+                if (!HasPrefabForStage(nextStage))
+                {
+                    return;
+                }
+
+                CurrentStage = nextStage;
+                growthStep = 0;
+                ShowStage(CurrentStage);
+                return;
+            }
+
+            if (!leavesSpawnedForActiveStem)
+            {
+                StemDimensions leafStemDimensions = MeasureStem(activeStem);
+                leafGrowthController?.SetStemMaterials(consistentStemMaterials);
+                leafGrowthController?.SpawnLeavesForCompletedStem(
+                    currentStemBaseHeight,
+                    leafStemDimensions.topHeight,
+                    leafStemDimensions.baseThickness * 0.5f);
+                leavesSpawnedForActiveStem = true;
+            }
+
+            if (HasReachedMaximumPlantHeight(out _))
+            {
+                GetPlantMaximumDimensions(out _, out float greatestThickness);
+                if (greatestThickness < maximumStemThickness - 0.001f)
+                {
+                    float thicknessFactor = Mathf.Min(
+                        baseThicknessGrowthMultiplier,
+                        maximumStemThickness
+                            / Mathf.Max(greatestThickness, 0.0001f));
+                    ScaleAllStemThickness(thicknessFactor);
+                }
+
+                return;
+            }
+
+            if (!stackNewStemAfterStageFour)
+            {
+                return;
+            }
+
+            StemDimensions completedDimensions = MeasureStem(activeStem);
+            currentStemBaseHeight =
+                completedDimensions.topHeight - stackedStemOverlap;
+            requiredBaseThicknessForNextStem = Mathf.Min(
+                completedDimensions.topThickness,
+                maximumStemThickness);
+            currentSegmentBaseThicknessLimit =
+                requiredBaseThicknessForNextStem;
+            completedStems.Add(activeStem);
+            activeStem = null;
+            CurrentStage = 1;
+            growthStep = 0;
+            leavesSpawnedForActiveStem = false;
+            ShowStage(CurrentStage);
+        }
+
+        private void CompleteStemImmediately()
+        {
+            if (plantDimensionsReady)
+            {
+                return;
+            }
+
+            StopGrowth();
+            if (!HasPrefabForStage(CurrentStage))
+            {
+                return;
+            }
+
+            if (!stemHasAppeared)
+            {
+                ShowStage(CurrentStage);
+                stemHasAppeared = activeStem != null;
+            }
+
+            const int safetyLimit = 96;
+            int safety = 0;
+            while (!plantDimensionsReady && safety++ < safetyLimit)
+            {
+                while (CurrentStage < TerminalStage && safety++ < safetyLimit)
+                {
+                    while (growthStep < growthStepsBeforeNextStage
+                        && safety++ < safetyLimit)
+                    {
+                        GrowActiveStemBiologically();
+                        SynchronizePlantThicknessWithHeight();
+                        growthStep++;
+                    }
+
+                    int nextStage = CurrentStage + 1;
+                    if (!HasPrefabForStage(nextStage))
+                    {
+                        break;
+                    }
+
+                    CurrentStage = nextStage;
+                    growthStep = 0;
+                    ShowStage(CurrentStage);
+                }
+
+                if (!leavesSpawnedForActiveStem)
+                {
+                    StemDimensions leafStemDimensions = MeasureStem(activeStem);
+                    leafGrowthController?.SetStemMaterials(consistentStemMaterials);
+                    leafGrowthController?.SpawnLeavesForCompletedStem(
+                        currentStemBaseHeight,
+                        leafStemDimensions.topHeight,
+                        leafStemDimensions.baseThickness * 0.5f);
+                    leavesSpawnedForActiveStem = true;
+                }
+
+                if (HasReachedMaximumPlantHeight(out float flowerHeight))
+                {
+                    GetPlantMaximumDimensions(out _, out float greatestThickness);
+                    while (greatestThickness < maximumStemThickness - 0.001f
+                        && safety++ < safetyLimit)
+                    {
+                        float thicknessFactor = Mathf.Min(
+                            baseThicknessGrowthMultiplier,
+                            maximumStemThickness
+                                / Mathf.Max(greatestThickness, 0.0001f));
+                        ScaleAllStemThickness(thicknessFactor);
+                        GetPlantMaximumDimensions(
+                            out _,
+                            out greatestThickness);
+                    }
+
+                    GetPlantMaximumDimensions(
+                        out flowerHeight,
+                        out greatestThickness);
+                    flowerSupportThickness =
+                        MeasureStemTopInterfaceThickness(activeStem);
+                    if (flowerSupportThickness <= 0f)
+                    {
+                        flowerSupportThickness = Mathf.Max(
+                            greatestThickness,
+                            maximumStemThickness);
+                    }
+
+                    flowerSupportHeight = flowerHeight;
+                    plantDimensionsReady = true;
+                    break;
+                }
+
+                if (!stackNewStemAfterStageFour || activeStem == null)
+                {
+                    break;
+                }
+
+                StemDimensions completedDimensions = MeasureStem(activeStem);
+                if (completedDimensions.topHeight
+                    >= maximumTotalStemLength - 0.001f)
+                {
+                    break;
+                }
+
+                currentStemBaseHeight =
+                    completedDimensions.topHeight - stackedStemOverlap;
+                requiredBaseThicknessForNextStem = Mathf.Min(
+                    completedDimensions.topThickness,
+                    maximumStemThickness);
+                currentSegmentBaseThicknessLimit =
+                    requiredBaseThicknessForNextStem;
+                completedStems.Add(activeStem);
+                activeStem = null;
+                CurrentStage = 1;
+                growthStep = 0;
+                leavesSpawnedForActiveStem = false;
+                ShowStage(CurrentStage);
+            }
+
+            leafGrowthController?.SetDevelopmentStage(currentDevelopmentStage);
+        }
+
         private void SynchronizeFlowerWithPhenology()
         {
             if (!floweringAuthorized
@@ -413,6 +719,15 @@ namespace ICI.PlantGrowth
             }
 
             flowerGrowthController.SetStemMaterials(consistentStemMaterials);
+
+            if (developmentStageDriven)
+            {
+                flowerGrowthController.SetDevelopmentStage(
+                    currentDevelopmentStage,
+                    flowerSupportHeight,
+                    flowerSupportThickness);
+                return;
+            }
 
             if (maturityRequested)
             {
@@ -1123,6 +1438,21 @@ namespace ICI.PlantGrowth
 
         private IEnumerator WaitForSimulationSeconds(float seconds)
         {
+            if (developmentStageDriven)
+            {
+                nextVegetativeDvsThreshold = Mathf.Min(
+                    1f,
+                    nextVegetativeDvsThreshold + VegetativeDvsStep);
+                while (currentDevelopmentStage + 0.0001f
+                    < nextVegetativeDvsThreshold
+                    && currentDevelopmentStage < 1f)
+                {
+                    yield return null;
+                }
+
+                yield break;
+            }
+
             float remaining = Mathf.Max(0f, seconds);
             while (remaining > 0f)
             {

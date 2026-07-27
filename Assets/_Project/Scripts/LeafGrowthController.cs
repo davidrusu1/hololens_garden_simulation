@@ -8,6 +8,8 @@ namespace ICI.PlantGrowth
     public sealed class LeafGrowthController : MonoBehaviour
     {
         private const int LeafStageCount = 3;
+        private const float LeafStageDvsDuration = 0.045f;
+        private const float DvsDelayPerLegacySecond = 0.015f;
 
         [Header("Leaf models (stage 1 to stage 3)")]
         [SerializeField]
@@ -90,12 +92,38 @@ namespace ICI.PlantGrowth
         private int createdLeafCount;
         private Material[] stemMaterials;
         private bool completeImmediatelyRequested;
+        private bool developmentStageDriven;
+        private float currentDevelopmentStage = -0.1f;
 
         public int CreatedLeafCount => createdLeafCount;
 
         public void SetSimulationSpeed(float speedMultiplier)
         {
             simulationSpeedMultiplier = Mathf.Max(0.1f, speedMultiplier);
+        }
+
+        public void SetDevelopmentStage(float developmentStage)
+        {
+            developmentStageDriven = true;
+            currentDevelopmentStage = Mathf.Clamp(
+                developmentStage,
+                -0.1f,
+                2f);
+
+            if (currentDevelopmentStage < 0f)
+            {
+                if (createdLeafCount > 0 || leafPivots.Count > 0)
+                {
+                    ResetLeaves();
+                }
+
+                return;
+            }
+
+            if (currentDevelopmentStage >= 1f)
+            {
+                CompleteGrowthImmediately();
+            }
         }
 
         public void Initialize(Transform parent)
@@ -174,6 +202,7 @@ namespace ICI.PlantGrowth
             leafPivots.Clear();
             createdLeafCount = 0;
             completeImmediatelyRequested = false;
+            currentDevelopmentStage = -0.1f;
         }
 
         private IEnumerator GrowLeafAtJoint(
@@ -245,10 +274,23 @@ namespace ICI.PlantGrowth
                     * Quaternion.Euler(targetAngle, 0f, 0f);
 
                 float elapsed = 0f;
-                while (elapsed < leafGrowthDuration && !completeImmediatelyRequested)
+                float stageStartDvs = currentDevelopmentStage;
+                while (!completeImmediatelyRequested)
                 {
-                    elapsed += Time.deltaTime * simulationSpeedMultiplier;
-                    float progress = Mathf.Clamp01(elapsed / leafGrowthDuration);
+                    float progress;
+                    if (developmentStageDriven)
+                    {
+                        progress = Mathf.InverseLerp(
+                            stageStartDvs,
+                            stageStartDvs + LeafStageDvsDuration,
+                            currentDevelopmentStage);
+                    }
+                    else
+                    {
+                        elapsed += Time.deltaTime * simulationSpeedMultiplier;
+                        progress = Mathf.Clamp01(elapsed / leafGrowthDuration);
+                    }
+
                     activeLeaf.transform.localScale = Vector3.Lerp(
                         startScale,
                         finalScale,
@@ -257,6 +299,12 @@ namespace ICI.PlantGrowth
                         startRotation,
                         finalRotation,
                         Mathf.SmoothStep(0f, 1f, progress));
+
+                    if (progress >= 1f)
+                    {
+                        break;
+                    }
+
                     yield return null;
                 }
 
@@ -275,6 +323,20 @@ namespace ICI.PlantGrowth
 
         private IEnumerator WaitForSimulationSeconds(float seconds)
         {
+            if (developmentStageDriven)
+            {
+                float targetDevelopmentStage = currentDevelopmentStage
+                    + Mathf.Max(0f, seconds) * DvsDelayPerLegacySecond;
+                while (currentDevelopmentStage + 0.0001f
+                    < targetDevelopmentStage
+                    && currentDevelopmentStage < 1f)
+                {
+                    yield return null;
+                }
+
+                yield break;
+            }
+
             float remaining = Mathf.Max(0f, seconds);
             while (remaining > 0f)
             {

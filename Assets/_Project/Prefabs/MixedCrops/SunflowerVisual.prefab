@@ -74,6 +74,7 @@ MonoBehaviour:
   stackedStemOverlap: 0.015
   startAutomatically: 0
   simulationSpeedMultiplier: 1
+  flowerGrowthSpeedRatio: 0.3
   leafGrowthController: {fileID: 3843757657974380189}
   flowerGrowthController: {fileID: 4308147126472987659}
 --- !u!114 &3843757657974380189

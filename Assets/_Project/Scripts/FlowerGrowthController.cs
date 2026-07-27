@@ -42,12 +42,17 @@ namespace ICI.PlantGrowth
         private Coroutine growthRoutine;
         private int currentStage;
         private Material[] stemMaterials;
+        private bool developmentStageDriven;
+        private float currentDevelopmentStage = -0.1f;
+        private Vector3 developmentStageBaseScale;
 
         public int CurrentStage => currentStage;
         public bool HasStarted => growthRoutine != null || activeFlower != null;
-        public bool IsComplete => activeFlower != null
-            && growthRoutine == null
-            && currentStage >= FlowerStageCount;
+        public bool IsComplete => developmentStageDriven
+            ? activeFlower != null && currentDevelopmentStage >= 2f
+            : activeFlower != null
+                && growthRoutine == null
+                && currentStage >= FlowerStageCount;
 
         public void SetSimulationSpeed(float speedMultiplier)
         {
@@ -64,6 +69,90 @@ namespace ICI.PlantGrowth
             stemMaterials = materials;
         }
 
+        /// <summary>
+        /// Reconstructs the flower directly from reproductive DVS. DVS 1
+        /// creates the first flower stage and DVS 2 completes the last stage.
+        /// No elapsed-time value participates in this path.
+        /// </summary>
+        public void SetDevelopmentStage(
+            float developmentStage,
+            float stemTopHeight,
+            float stemTopThickness)
+        {
+            developmentStageDriven = true;
+            currentDevelopmentStage = Mathf.Clamp(
+                developmentStage,
+                -0.1f,
+                2f);
+
+            if (currentDevelopmentStage < 1f)
+            {
+                if (activeFlower != null || growthRoutine != null)
+                {
+                    ResetFlower();
+                }
+
+                return;
+            }
+
+            if (!HasAllFlowerPrefabs())
+            {
+                return;
+            }
+
+            if (growthParent == null)
+            {
+                growthParent = transform;
+            }
+
+            if (growthRoutine != null)
+            {
+                StopCoroutine(growthRoutine);
+                growthRoutine = null;
+            }
+
+            float reproductiveProgress = Mathf.InverseLerp(
+                1f,
+                2f,
+                currentDevelopmentStage);
+            float scaledProgress = reproductiveProgress * FlowerStageCount;
+            int targetStage = reproductiveProgress >= 1f
+                ? FlowerStageCount
+                : Mathf.Clamp(
+                    Mathf.FloorToInt(scaledProgress) + 1,
+                    1,
+                    FlowerStageCount);
+            float progressInsideStage = reproductiveProgress >= 1f
+                ? 1f
+                : scaledProgress - Mathf.Floor(scaledProgress);
+
+            if (activeFlower == null || currentStage != targetStage)
+            {
+                float minimumSize = activeFlower != null
+                    ? MeasureFlowerSize(activeFlower)
+                    : 0f;
+                currentStage = targetStage;
+                ShowStage(
+                    currentStage,
+                    stemTopHeight,
+                    stemTopThickness,
+                    minimumSize);
+                if (activeFlower == null)
+                {
+                    return;
+                }
+
+                developmentStageBaseScale = activeFlower.transform.localScale;
+            }
+
+            activeFlower.transform.localScale = developmentStageBaseScale
+                * Mathf.Pow(
+                    scaleMultiplier,
+                    progressInsideStage * growthStepsBeforeNextStage);
+            MatchPeduncleBaseThickness(activeFlower, stemTopThickness);
+            AlignPeduncleBaseToStem(activeFlower, stemTopHeight);
+        }
+
         public void StartFlowerGrowth(float stemTopHeight, float stemTopThickness)
         {
             if (HasStarted || !HasAllFlowerPrefabs())
@@ -71,6 +160,8 @@ namespace ICI.PlantGrowth
                 return;
             }
 
+            developmentStageDriven = false;
+            currentDevelopmentStage = -0.1f;
             if (growthParent == null)
             {
                 growthParent = transform;
@@ -83,6 +174,12 @@ namespace ICI.PlantGrowth
             float stemTopHeight,
             float stemTopThickness)
         {
+            if (developmentStageDriven)
+            {
+                SetDevelopmentStage(2f, stemTopHeight, stemTopThickness);
+                return;
+            }
+
             if (!HasAllFlowerPrefabs())
             {
                 return;
@@ -138,6 +235,7 @@ namespace ICI.PlantGrowth
             }
 
             currentStage = 0;
+            developmentStageBaseScale = Vector3.one;
         }
 
         private IEnumerator GrowFlower(float stemTopHeight, float stemTopThickness)

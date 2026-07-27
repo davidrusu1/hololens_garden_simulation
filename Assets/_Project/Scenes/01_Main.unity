@@ -470,12 +470,13 @@ MonoBehaviour:
     type: 3}
   sunflowerCount: 3
   cassavaCount: 3
-  horizontalSpacing: 1.25
-  rowSpacing: 1.3
+  horizontalSpacing: 1.45
+  rowSpacing: 1.55
   staggerAlternateRows: 1
   localOrigin: {x: 0, y: 0, z: 0}
-  sunflowerScale: 0.72
-  cassavaScale: 1
+  sunflowerMatureHeightMeters: 2.35
+  sunflowerAuthoredMatureHeightMeters: 5.65
+  cassavaMatureHeightMeters: 1.85
 --- !u!1 &1597847153
 GameObject:
   m_ObjectHideFlags: 0
@@ -537,6 +538,7 @@ MonoBehaviour:
   stackedStemOverlap: 0.015
   startAutomatically: 0
   simulationSpeedMultiplier: 1
+  flowerGrowthSpeedRatio: 0.3
   leafGrowthController: {fileID: 1597847156}
   flowerGrowthController: {fileID: 1597847157}
 --- !u!4 &1597847155
@@ -638,7 +640,8 @@ MonoBehaviour:
   soilWaterAvailability: 1
   secondsPerSimulatedDay: 0.5
   visualGrowthSpeed: 1
-  visualMorphologySpeedFactor: 3
+  visualMorphologySpeedFactor: 2
+  sunflowerPlantDensityPerHectare: 50000
   showRuntimePanel: 1
 --- !u!1 &1823688464
 GameObject:

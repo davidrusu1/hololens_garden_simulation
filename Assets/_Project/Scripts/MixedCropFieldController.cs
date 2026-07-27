@@ -32,8 +32,16 @@ namespace ICI.PlantGrowth.MixedCrops
         [SerializeField, Min(0.4f)] private float rowSpacing = 1.3f;
         [SerializeField] private bool staggerAlternateRows = true;
         [SerializeField] private Vector3 localOrigin = Vector3.zero;
-        [SerializeField, Min(0.1f)] private float sunflowerScale = 0.72f;
-        [SerializeField, Min(0.1f)] private float cassavaScale = 1f;
+        [Header("Real plant dimensions")]
+        [SerializeField, Min(0.5f)]
+        [Tooltip("Target full mature sunflower height in metres, including the flower head.")]
+        private float sunflowerMatureHeightMeters = 2.35f;
+        [SerializeField, Min(0.5f)]
+        [Tooltip("Measured full height of the authored mature sunflower prefab before field scaling.")]
+        private float sunflowerAuthoredMatureHeightMeters = 5.65f;
+        [SerializeField, Min(0.5f)]
+        [Tooltip("Target mature cassava canopy height in metres.")]
+        private float cassavaMatureHeightMeters = 1.85f;
 
         private readonly List<GameObject> plantObjects = new List<GameObject>();
         private readonly List<StemGrowthController> sunflowers =
@@ -42,11 +50,35 @@ namespace ICI.PlantGrowth.MixedCrops
             new List<CassavaPlantGrowthController>();
         private Transform generatedField;
         private float simulationSpeed = 1f;
+        private float currentSimulationDay;
+        private float currentSunflowerDevelopmentStage = -0.1f;
 
         public int SunflowerCount => sunflowerCount;
         public int CassavaCount => cassavaCount;
         public int TotalPlantCount => sunflowerCount + cassavaCount;
         public int RowCount => Mathf.CeilToInt(TotalPlantCount / (float)MaxPlantsPerRow);
+        public float SunflowerMatureHeightMeters => sunflowerMatureHeightMeters;
+        public float CassavaMatureHeightMeters => cassavaMatureHeightMeters;
+        public float CurrentSimulationDay => currentSimulationDay;
+        public float SunflowerDevelopmentStage =>
+            currentSunflowerDevelopmentStage;
+        public float CassavaCanopyProgress => cassavas.Count > 0 && cassavas[0] != null
+            ? cassavas[0].CanopyProgress
+            : 0f;
+        public string CassavaGrowthStage => cassavas.Count > 0 && cassavas[0] != null
+            ? cassavas[0].GrowthStageLabel
+            : "Fără cassava în câmp";
+        public bool SunflowerStemsStillGrowing => sunflowers.Exists(
+            sunflower => sunflower != null && sunflower.IsGrowing);
+        public bool SunflowerStemsReady => sunflowers.Count > 0
+            && sunflowers.TrueForAll(sunflower => sunflower != null
+                && sunflower.HasReachedMatureStemDimensions);
+        public bool SunflowerFlowersStarted => sunflowers.Count > 0
+            && sunflowers.TrueForAll(sunflower => sunflower != null
+                && sunflower.HasFlowerStarted);
+        public bool SunflowerFlowersComplete => sunflowers.Count > 0
+            && sunflowers.TrueForAll(sunflower => sunflower != null
+                && sunflower.IsFlowerComplete);
 
         private void Awake()
         {
@@ -114,10 +146,14 @@ namespace ICI.PlantGrowth.MixedCrops
             }
 
             SetSimulationSpeed(simulationSpeed);
+            SetSimulationDay(currentSimulationDay);
+            SetSunflowerDevelopmentStage(currentSunflowerDevelopmentStage);
         }
 
         public void ResetAllGrowth()
         {
+            currentSimulationDay = 0f;
+            currentSunflowerDevelopmentStage = -0.1f;
             foreach (StemGrowthController sunflower in sunflowers)
             {
                 if (sunflower == null)
@@ -126,8 +162,7 @@ namespace ICI.PlantGrowth.MixedCrops
                 }
 
                 sunflower.SetAutomaticStart(false);
-                sunflower.SetStage(1);
-                sunflower.StopGrowth();
+                sunflower.SetDevelopmentStage(currentSunflowerDevelopmentStage);
             }
 
             foreach (CassavaPlantGrowthController cassava in cassavas)
@@ -138,14 +173,13 @@ namespace ICI.PlantGrowth.MixedCrops
 
         public void StartAllGrowth()
         {
+            currentSunflowerDevelopmentStage = Mathf.Max(
+                0f,
+                currentSunflowerDevelopmentStage);
             foreach (StemGrowthController sunflower in sunflowers)
             {
-                sunflower?.StartGrowth();
-            }
-
-            foreach (CassavaPlantGrowthController cassava in cassavas)
-            {
-                cassava?.StartGrowth();
+                sunflower?.SetDevelopmentStage(
+                    currentSunflowerDevelopmentStage);
             }
         }
 
@@ -176,25 +210,45 @@ namespace ICI.PlantGrowth.MixedCrops
             }
         }
 
-        public void NotifyFloweringStarted()
+        /// <summary>
+        /// Sends one shared biological clock to every cassava plant. Sunflower
+        /// flowering and maturity remain controlled by its temperature-based DVS.
+        /// </summary>
+        public void SetSimulationDay(float daysAfterSowing)
         {
+            currentSimulationDay = Mathf.Max(0f, daysAfterSowing);
+            foreach (CassavaPlantGrowthController cassava in cassavas)
+            {
+                cassava?.SetBiologicalAgeDays(currentSimulationDay);
+            }
+        }
+
+        /// <summary>
+        /// DVS is the only visual clock for sunflower. Vegetative structures
+        /// follow DVS 0..1 and the flower follows DVS 1..2.
+        /// </summary>
+        public void SetSunflowerDevelopmentStage(float developmentStage)
+        {
+            currentSunflowerDevelopmentStage = Mathf.Clamp(
+                developmentStage,
+                -0.1f,
+                2f);
             foreach (StemGrowthController sunflower in sunflowers)
             {
-                sunflower?.NotifyFloweringStarted();
+                sunflower?.SetDevelopmentStage(
+                    currentSunflowerDevelopmentStage);
             }
+        }
+
+        public void NotifyFloweringStarted()
+        {
+            SetSunflowerDevelopmentStage(
+                Mathf.Max(1f, currentSunflowerDevelopmentStage));
         }
 
         public void CompleteVisualMaturity()
         {
-            foreach (StemGrowthController sunflower in sunflowers)
-            {
-                sunflower?.CompleteVisualMaturity();
-            }
-
-            foreach (CassavaPlantGrowthController cassava in cassavas)
-            {
-                cassava?.CompleteVisualMaturity();
-            }
+            SetSunflowerDevelopmentStage(2f);
         }
 
         private static List<PlantType> BuildAlternatingSequence(
@@ -252,13 +306,17 @@ namespace ICI.PlantGrowth.MixedCrops
             plant.name = $"{index + 1:00} - Floarea-soarelui";
             plant.transform.localPosition = localPosition;
             plant.transform.localRotation = Quaternion.Euler(0f, (index % 4) * 12f - 18f, 0f);
-            plant.transform.localScale = Vector3.one * sunflowerScale;
 
             StemGrowthController controller = plant.GetComponent<StemGrowthController>();
+            float physicalScale = sunflowerMatureHeightMeters
+                / Mathf.Max(0.1f, sunflowerAuthoredMatureHeightMeters);
+            plant.transform.localScale = Vector3.one * physicalScale;
             if (controller != null)
             {
                 controller.SetAutomaticStart(false);
                 controller.SetSimulationSpeed(simulationSpeed);
+                controller.SetDevelopmentStage(
+                    currentSunflowerDevelopmentStage);
                 sunflowers.Add(controller);
             }
 
@@ -272,11 +330,14 @@ namespace ICI.PlantGrowth.MixedCrops
             plant.transform.SetParent(generatedField, false);
             plant.transform.localPosition = localPosition;
             plant.transform.localRotation = Quaternion.Euler(0f, (index % 5) * 17f, 0f);
-            plant.transform.localScale = Vector3.one * cassavaScale;
             CassavaPlantGrowthController controller =
                 plant.AddComponent<CassavaPlantGrowthController>();
+            float physicalScale = cassavaMatureHeightMeters
+                / controller.EstimatedMatureHeightMeters;
+            plant.transform.localScale = Vector3.one * physicalScale;
             controller.SetAutomaticStart(false);
             controller.SetSimulationSpeed(simulationSpeed);
+            controller.SetBiologicalAgeDays(currentSimulationDay);
             cassavas.Add(controller);
             plantObjects.Add(plant);
         }
