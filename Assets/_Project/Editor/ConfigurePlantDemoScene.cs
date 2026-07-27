@@ -285,7 +285,7 @@ namespace ICI.PlantGrowth.Editor
             serializedField.FindProperty("staggerAlternateRows").boolValue = true;
             serializedField.FindProperty("localOrigin").vector3Value = Vector3.zero;
             serializedField.FindProperty("sunflowerMatureHeightMeters").floatValue = 2.35f;
-            serializedField.FindProperty("sunflowerAuthoredMatureHeightMeters").floatValue = 5.65f;
+            serializedField.FindProperty("sunflowerAuthoredMatureHeightMeters").floatValue = 4.26f;
             serializedField.FindProperty("cassavaMatureHeightMeters").floatValue = 1.85f;
             serializedField.ApplyModifiedPropertiesWithoutUndo();
             EditorUtility.SetDirty(field);

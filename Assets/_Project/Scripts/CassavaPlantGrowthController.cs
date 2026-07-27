@@ -44,6 +44,7 @@ namespace ICI.PlantGrowth.MixedCrops
         }
 
         private const float GoldenAngle = 137.5f;
+        private const int CanopyElevationBandCount = 3;
 
         [Header("Biological calendar (days after planting)")]
         [SerializeField, Min(0f)] private float emergenceDay = 8f;
@@ -70,6 +71,29 @@ namespace ICI.PlantGrowth.MixedCrops
         [SerializeField, Range(3, 9)] private int leavesPerBranch = 5;
         [SerializeField] private int randomSeed = 1976;
 
+        [Header("Adaptive canopy gap filling")]
+        [SerializeField, Range(16, 96)]
+        [Tooltip("Number of dome directions evaluated whenever a new branch or leaf is planned.")]
+        private int canopyDirectionCandidates = 48;
+        [SerializeField, Range(6, 16)]
+        [Tooltip("Horizontal sectors used to detect uncovered areas around the canopy.")]
+        private int canopyAzimuthSectors = 8;
+        [SerializeField, Range(0.35f, 1f)]
+        [Tooltip("How strongly branches bend toward uncovered canopy directions.")]
+        private float branchGapFillingStrength = 0.76f;
+        [SerializeField, Range(0.5f, 1f)]
+        [Tooltip("How strongly leaves point toward uncovered canopy directions.")]
+        private float leafGapFillingStrength = 0.9f;
+        [SerializeField, Range(0f, 0.3f)]
+        [Tooltip("Lowest upward component allowed for a planned canopy direction. Low values include lateral gaps.")]
+        private float minimumCanopyDirectionY = 0.06f;
+        [SerializeField, Range(0.1f, 0.45f)]
+        [Tooltip("Desired share of coverage allocated to the lateral rim of the dome.")]
+        private float sideCoverageTarget = 0.3f;
+        [SerializeField, Range(0.1f, 0.45f)]
+        [Tooltip("Desired share of coverage allocated to the top of the dome.")]
+        private float topCoverageTarget = 0.3f;
+
         [Header("Palmate leaves")]
         [SerializeField, Min(0.03f)] private float petioleLength = 0.105f;
         [SerializeField, Min(0.05f)] private float leafLobeLength = 0.19f;
@@ -81,6 +105,7 @@ namespace ICI.PlantGrowth.MixedCrops
         [SerializeField] private Color leafColor = new Color(0.09f, 0.64f, 0.17f, 1f);
 
         private readonly List<BranchVisual> branchVisuals = new List<BranchVisual>();
+        private readonly List<Vector3> plannedCanopyDirections = new List<Vector3>();
         private Transform generatedPlant;
         private Material stemMaterial;
         private Material leafMaterial;
@@ -95,6 +120,9 @@ namespace ICI.PlantGrowth.MixedCrops
         public float FullCanopyDay => fullCanopyDay;
         public float HarvestMaturityDay => harvestMaturityDay;
         public float CanopyProgress => Mathf.InverseLerp(emergenceDay, fullCanopyDay, biologicalAgeDays);
+        public float PlannedCanopyCoverageRatio => CalculatePlannedCanopyCoverageRatio();
+        public bool PlannedCanopyCoversSideAndTop =>
+            HasPlannedCoverageInBand(0) && HasPlannedCoverageInBand(2);
 
         /// <summary>
         /// Nominal top height before the field-level metres calibration is
@@ -118,7 +146,9 @@ namespace ICI.PlantGrowth.MixedCrops
                     height += parentLength * Mathf.Cos(secondForkTilt * Mathf.Deg2Rad);
                 }
 
-                return Mathf.Max(0.1f, height);
+                float canopyAllowance = leafLobeLength * 0.65f
+                    + petioleLength * 0.25f;
+                return Mathf.Max(0.1f, height + canopyAllowance);
             }
         }
 
@@ -259,6 +289,7 @@ namespace ICI.PlantGrowth.MixedCrops
         private void RebuildArchitecture()
         {
             branchVisuals.Clear();
+            plannedCanopyDirections.Clear();
             RecreateGeneratedPlantRoot();
             BuildBranchVisual(new BranchPlan
             {
@@ -301,10 +332,17 @@ namespace ICI.PlantGrowth.MixedCrops
                         lastLeafFraction,
                         leafIndex / (float)(leafBudget - 1));
                 float leafStartDay = Mathf.Lerp(startDay, endDay, fraction);
+                Quaternion leafRotation = CalculateGapFillingLeafRotation(
+                    branchRoot,
+                    random,
+                    plan.Generation,
+                    leafIndex,
+                    out Vector3 leafCanopyDirection);
                 Transform leaf = CreateLeaf(
                     branchRoot,
                     plan.Length * fraction,
-                    CalculateLeafAzimuth(random, plan.Generation, leafIndex));
+                    leafRotation);
+                RegisterCanopyDirection(leafCanopyDirection);
                 visual.Leaves.Add(new LeafVisual
                 {
                     Root = leaf,
@@ -408,11 +446,12 @@ namespace ICI.PlantGrowth.MixedCrops
             stem.localPosition = Vector3.up * (visibleLength * 0.5f);
         }
 
-        private IEnumerable<BranchPlan> CreateChildPlans(
+        private List<BranchPlan> CreateChildPlans(
             BranchPlan parent,
             Transform branchRoot,
             System.Random random)
         {
+            var children = new List<BranchPlan>(branchesPerFork);
             int childGeneration = parent.Generation + 1;
             float baseAzimuth = NextFloat(random, 0f, 120f);
             float tilt = childGeneration == 1 ? firstForkTilt : secondForkTilt;
@@ -423,20 +462,43 @@ namespace ICI.PlantGrowth.MixedCrops
                     + index * (360f / branchesPerFork)
                     + NextFloat(random, -6f, 6f);
                 float variedTilt = tilt + NextFloat(random, -4f, 4f);
-                yield return new BranchPlan
+                Quaternion naturalLocalRotation =
+                    Quaternion.AngleAxis(azimuth, Vector3.up)
+                    * Quaternion.AngleAxis(variedTilt, Vector3.forward);
+                Vector3 naturalPlantDirection = BranchLocalToPlantDirection(
+                    branchRoot,
+                    naturalLocalRotation * Vector3.up);
+                Vector3 gapDirection = FindLeastCoveredDomeDirection(
+                    random,
+                    0.985f);
+                Vector3 chosenPlantDirection = ClampDomeDirection(
+                    Vector3.Slerp(
+                        naturalPlantDirection,
+                        gapDirection,
+                        branchGapFillingStrength),
+                    0.985f);
+                Vector3 chosenParentDirection = PlantToBranchLocalDirection(
+                    branchRoot,
+                    chosenPlantDirection);
+
+                children.Add(new BranchPlan
                 {
                     Parent = branchRoot,
                     LocalPosition = Vector3.up * parent.Length,
-                    LocalRotation = Quaternion.AngleAxis(azimuth, Vector3.up)
-                        * Quaternion.AngleAxis(variedTilt, Vector3.forward),
+                    LocalRotation = Quaternion.FromToRotation(
+                        Vector3.up,
+                        chosenParentDirection),
                     Generation = childGeneration,
                     Length = parent.Length
                         * childLengthMultiplier
                         * NextFloat(random, 0.92f, 1.08f),
                     Radius = parent.Radius * childRadiusMultiplier,
                     Seed = random.Next()
-                };
+                });
+                RegisterCanopyDirection(chosenPlantDirection);
             }
+
+            return children;
         }
 
         private int GetLeafBudget(int generation)
@@ -446,14 +508,51 @@ namespace ICI.PlantGrowth.MixedCrops
                 : Mathf.Max(3, leavesPerBranch - generation + 1);
         }
 
-        private static float CalculateLeafAzimuth(
+        private Quaternion CalculateGapFillingLeafRotation(
+            Transform branch,
             System.Random random,
             int generation,
-            int leafIndex)
+            int leafIndex,
+            out Vector3 chosenPlantDirection)
         {
-            return leafIndex * GoldenAngle
+            float naturalAzimuth = leafIndex * GoldenAngle
                 + generation * 18f
                 + NextFloat(random, -7f, 7f);
+            float naturalLift = NextFloat(random, -18f, -7f);
+            Quaternion naturalLocalRotation =
+                Quaternion.AngleAxis(naturalAzimuth, Vector3.up)
+                * Quaternion.AngleAxis(naturalLift, Vector3.forward);
+            Vector3 naturalPlantDirection = BranchLocalToPlantDirection(
+                branch,
+                naturalLocalRotation * Vector3.right);
+            Vector3 gapDirection = FindLeastCoveredDomeDirection(random, 0.92f);
+            chosenPlantDirection = ClampDomeDirection(
+                Vector3.Slerp(
+                    naturalPlantDirection,
+                    gapDirection,
+                    leafGapFillingStrength),
+                0.92f);
+
+            Vector3 localDirection = PlantToBranchLocalDirection(
+                branch,
+                chosenPlantDirection);
+            Vector3 localPlantUp = PlantToBranchLocalDirection(
+                branch,
+                Vector3.up);
+            Vector3 localLeafUp = Vector3.ProjectOnPlane(
+                localPlantUp,
+                localDirection);
+            if (localLeafUp.sqrMagnitude <= 0.0001f)
+            {
+                localLeafUp = Vector3.ProjectOnPlane(
+                    Vector3.forward,
+                    localDirection);
+            }
+            localLeafUp.Normalize();
+            Vector3 localForward = Vector3.Cross(
+                localDirection,
+                localLeafUp).normalized;
+            return Quaternion.LookRotation(localForward, localLeafUp);
         }
 
         private static float CalculateLeafScale(System.Random random, int generation)
@@ -461,14 +560,16 @@ namespace ICI.PlantGrowth.MixedCrops
             return NextFloat(random, 0.88f, 1.08f) * Mathf.Pow(0.92f, generation);
         }
 
-        private Transform CreateLeaf(Transform branch, float height, float azimuth)
+        private Transform CreateLeaf(
+            Transform branch,
+            float height,
+            Quaternion localRotation)
         {
             var leafRootObject = new GameObject("Palmate Cassava Leaf");
             Transform leafRoot = leafRootObject.transform;
             leafRoot.SetParent(branch, false);
             leafRoot.localPosition = Vector3.up * height;
-            leafRoot.localRotation = Quaternion.AngleAxis(azimuth, Vector3.up)
-                * Quaternion.AngleAxis(-13f, Vector3.forward);
+            leafRoot.localRotation = localRotation;
 
             GameObject petiole = GameObject.CreatePrimitive(PrimitiveType.Cylinder);
             petiole.name = "Long Petiole";
@@ -485,6 +586,223 @@ namespace ICI.PlantGrowth.MixedCrops
             blade.AddComponent<MeshRenderer>().sharedMaterial = leafMaterial;
             leafRoot.localScale = Vector3.zero;
             return leafRoot;
+        }
+
+        private Vector3 FindLeastCoveredDomeDirection(
+            System.Random random,
+            float maximumDirectionY)
+        {
+            int candidateCount = Mathf.Max(16, canopyDirectionCandidates);
+            float phase = NextFloat(random, 0f, 360f);
+            Vector3 bestDirection = Vector3.up;
+            float bestScore = float.NegativeInfinity;
+
+            for (int index = 0; index < candidateCount; index++)
+            {
+                float normalized = (index + 0.5f) / candidateCount;
+                float y = Mathf.Lerp(
+                    minimumCanopyDirectionY,
+                    maximumDirectionY,
+                    normalized);
+                float radial = Mathf.Sqrt(Mathf.Max(0f, 1f - y * y));
+                float azimuth = (phase + index * GoldenAngle) * Mathf.Deg2Rad;
+                Vector3 candidate = new Vector3(
+                    Mathf.Sin(azimuth) * radial,
+                    y,
+                    Mathf.Cos(azimuth) * radial);
+                float score = ScoreCanopyDirection(candidate);
+                if (score <= bestScore)
+                {
+                    continue;
+                }
+
+                bestScore = score;
+                bestDirection = candidate;
+            }
+
+            return bestDirection.normalized;
+        }
+
+        private float ScoreCanopyDirection(Vector3 candidate)
+        {
+            GetCanopyCell(
+                candidate,
+                out int candidateBand,
+                out int candidateSector);
+            int cellOccupancy = 0;
+            int neighborOccupancy = 0;
+            int bandOccupancy = 0;
+            float nearestAngle = plannedCanopyDirections.Count == 0 ? 120f : 180f;
+            float localDensity = 0f;
+
+            foreach (Vector3 occupiedDirection in plannedCanopyDirections)
+            {
+                GetCanopyCell(
+                    occupiedDirection,
+                    out int occupiedBand,
+                    out int occupiedSector);
+                if (occupiedBand == candidateBand)
+                {
+                    bandOccupancy++;
+                    int sectorDistance = Mathf.Abs(
+                        occupiedSector - candidateSector);
+                    sectorDistance = Mathf.Min(
+                        sectorDistance,
+                        canopyAzimuthSectors - sectorDistance);
+                    if (sectorDistance == 0)
+                    {
+                        cellOccupancy++;
+                    }
+                    else if (sectorDistance == 1)
+                    {
+                        neighborOccupancy++;
+                    }
+                }
+
+                float dot = Mathf.Clamp(
+                    Vector3.Dot(candidate, occupiedDirection),
+                    -1f,
+                    1f);
+                nearestAngle = Mathf.Min(
+                    nearestAngle,
+                    Mathf.Acos(dot) * Mathf.Rad2Deg);
+                localDensity += Mathf.Exp((dot - 1f) / 0.08f);
+            }
+
+            float desiredBandCount = GetDesiredCoverageShare(candidateBand)
+                * (plannedCanopyDirections.Count + 1f);
+            float bandDeficit = desiredBandCount - bandOccupancy;
+            return nearestAngle * 1.25f
+                + bandDeficit * 28f
+                - cellOccupancy * 42f
+                - neighborOccupancy * 7f
+                - localDensity * 16f;
+        }
+
+        private float GetDesiredCoverageShare(int band)
+        {
+            float side = Mathf.Max(0.1f, sideCoverageTarget);
+            float top = Mathf.Max(0.1f, topCoverageTarget);
+            float middle = Mathf.Max(0.1f, 1f - side - top);
+            float total = side + middle + top;
+            if (band <= 0)
+            {
+                return side / total;
+            }
+            if (band >= CanopyElevationBandCount - 1)
+            {
+                return top / total;
+            }
+
+            return middle / total;
+        }
+
+        private void RegisterCanopyDirection(Vector3 direction)
+        {
+            if (direction.sqrMagnitude <= 0.0001f)
+            {
+                return;
+            }
+
+            plannedCanopyDirections.Add(direction.normalized);
+        }
+
+        private Vector3 BranchLocalToPlantDirection(
+            Transform branch,
+            Vector3 localDirection)
+        {
+            Vector3 worldDirection = branch.TransformDirection(localDirection);
+            return generatedPlant.InverseTransformDirection(
+                worldDirection).normalized;
+        }
+
+        private Vector3 PlantToBranchLocalDirection(
+            Transform branch,
+            Vector3 plantDirection)
+        {
+            Vector3 worldDirection = generatedPlant.TransformDirection(
+                plantDirection);
+            return branch.InverseTransformDirection(
+                worldDirection).normalized;
+        }
+
+        private Vector3 ClampDomeDirection(
+            Vector3 direction,
+            float maximumDirectionY)
+        {
+            if (direction.sqrMagnitude <= 0.0001f)
+            {
+                direction = Vector3.up;
+            }
+
+            direction.Normalize();
+            float y = Mathf.Clamp(
+                direction.y,
+                minimumCanopyDirectionY,
+                maximumDirectionY);
+            Vector3 horizontal = new Vector3(direction.x, 0f, direction.z);
+            if (horizontal.sqrMagnitude <= 0.0001f)
+            {
+                horizontal = Vector3.right;
+            }
+            horizontal.Normalize();
+            float radial = Mathf.Sqrt(Mathf.Max(0f, 1f - y * y));
+            return horizontal * radial + Vector3.up * y;
+        }
+
+        private float CalculatePlannedCanopyCoverageRatio()
+        {
+            if (plannedCanopyDirections.Count == 0)
+            {
+                return 0f;
+            }
+
+            var occupiedCells = new HashSet<int>();
+            foreach (Vector3 direction in plannedCanopyDirections)
+            {
+                GetCanopyCell(direction, out int band, out int sector);
+                occupiedCells.Add(band * canopyAzimuthSectors + sector);
+            }
+
+            int totalCells = canopyAzimuthSectors * CanopyElevationBandCount;
+            return occupiedCells.Count / (float)Mathf.Max(1, totalCells);
+        }
+
+        private bool HasPlannedCoverageInBand(int targetBand)
+        {
+            foreach (Vector3 direction in plannedCanopyDirections)
+            {
+                GetCanopyCell(direction, out int band, out _);
+                if (band == targetBand)
+                {
+                    return true;
+                }
+            }
+
+            return false;
+        }
+
+        private void GetCanopyCell(
+            Vector3 direction,
+            out int band,
+            out int sector)
+        {
+            Vector3 normalized = direction.sqrMagnitude > 0.0001f
+                ? direction.normalized
+                : Vector3.up;
+            band = normalized.y < 0.38f
+                ? 0
+                : normalized.y < 0.72f
+                    ? 1
+                    : 2;
+            float azimuth = Mathf.Repeat(
+                Mathf.Atan2(normalized.x, normalized.z) * Mathf.Rad2Deg,
+                360f);
+            sector = Mathf.Clamp(
+                Mathf.FloorToInt(
+                    azimuth / 360f * canopyAzimuthSectors),
+                0,
+                canopyAzimuthSectors - 1);
         }
 
         private void PrepareSharedResources()
@@ -588,6 +906,34 @@ namespace ICI.PlantGrowth.MixedCrops
             fullCanopyDay = Mathf.Max(secondForkDay + 1f, fullCanopyDay);
             harvestMaturityDay = Mathf.Max(fullCanopyDay + 1f, harvestMaturityDay);
             leafExpansionDays = Mathf.Max(1f, leafExpansionDays);
+            canopyDirectionCandidates = Mathf.Clamp(
+                canopyDirectionCandidates,
+                16,
+                96);
+            canopyAzimuthSectors = Mathf.Clamp(
+                canopyAzimuthSectors,
+                6,
+                16);
+            branchGapFillingStrength = Mathf.Clamp(
+                branchGapFillingStrength,
+                0.35f,
+                1f);
+            leafGapFillingStrength = Mathf.Clamp(
+                leafGapFillingStrength,
+                0.5f,
+                1f);
+            minimumCanopyDirectionY = Mathf.Clamp(
+                minimumCanopyDirectionY,
+                0f,
+                0.3f);
+            sideCoverageTarget = Mathf.Clamp(
+                sideCoverageTarget,
+                0.1f,
+                0.45f);
+            topCoverageTarget = Mathf.Clamp(
+                topCoverageTarget,
+                0.1f,
+                0.45f);
         }
 
         private static float SmoothProgress(float start, float end, float value)

@@ -202,6 +202,9 @@ namespace ICI.PlantGrowth.Editor
                 && field.CurrentSimulationDay <= 135f
                 && field.CassavaCanopyProgress > 0.65f
                 && field.CassavaCanopyProgress < 0.95f;
+            bool adaptiveCassavaCanopyValid =
+                field.CassavaPlannedCanopyCoversSideAndTop
+                && field.CassavaPlannedCanopyCoverageRatio >= 0.75f;
             MeasurePlantHeights(
                 generated,
                 out float measuredSunflowerHeight,
@@ -255,14 +258,24 @@ namespace ICI.PlantGrowth.Editor
                 && sunflowerTimelineValid
                 && dvsClockValid
                 && perPlantBiomassValid
+                && adaptiveCassavaCanopyValid
                 && relativeTimeValid)
             {
+                WriteValidationResult(
+                    true,
+                    $"day={field.CurrentSimulationDay:0.0}; "
+                    + $"cassavaDomeCoverage={field.CassavaPlannedCanopyCoverageRatio:0.000}; "
+                    + $"sideAndTop={field.CassavaPlannedCanopyCoversSideAndTop}; "
+                    + $"visibleHeights={measuredSunflowerHeight:0.00}/"
+                    + $"{measuredCassavaHeight:0.00}m");
                 Debug.Log(
                     "[Mixed Crop] Validation passed: 4 sunflowers + 4 cassava, "
                     + $"alternating, 2 rows, maximum 5 plants per row, day {field.CurrentSimulationDay:0}, "
                     + $"mature heights {field.SunflowerMatureHeightMeters:0.00} m / "
                     + $"{field.CassavaMatureHeightMeters:0.00} m, cassava canopy "
-                    + $"{field.CassavaCanopyProgress * 100f:0}%, sunflower still growing "
+                    + $"{field.CassavaCanopyProgress * 100f:0}% with "
+                    + $"{field.CassavaPlannedCanopyCoverageRatio * 100f:0}% planned dome coverage "
+                    + "including lateral and top sectors, sunflower still growing "
                     + $"on day 60 and flowering started at DVS 1, sunflower biomass "
                     + $"{simulation.TotalDryMatterPerPlantGrams:0.0} g dry matter per plant. "
                     + "Sunflower animation is synchronized and stable at unchanged DVS. "
@@ -271,6 +284,14 @@ namespace ICI.PlantGrowth.Editor
             }
             else
             {
+                WriteValidationResult(
+                    false,
+                    $"renderedScale={renderedScaleValid}; "
+                    + $"adaptiveCassavaCanopy={adaptiveCassavaCanopyValid}; "
+                    + $"cassavaDomeCoverage={field.CassavaPlannedCanopyCoverageRatio:0.000}; "
+                    + $"sideAndTop={field.CassavaPlannedCanopyCoversSideAndTop}; "
+                    + $"visibleHeights={measuredSunflowerHeight:0.00}/"
+                    + $"{measuredCassavaHeight:0.00}m");
                 Debug.LogError(
                     $"[Mixed Crop] Validation failed: generated={generatedCount}, "
                     + $"rows={field.RowCount}, alternating={alternating}, "
@@ -280,11 +301,29 @@ namespace ICI.PlantGrowth.Editor
                     + $"flowerComplete={field.SunflowerFlowersComplete}), "
                     + $"dvsClock={dvsClockValid}, "
                     + $"biomassPerPlant={perPlantBiomassValid}, "
+                    + $"adaptiveCassavaCanopy={adaptiveCassavaCanopyValid} "
+                    + $"({field.CassavaPlannedCanopyCoverageRatio * 100f:0}%, "
+                    + $"sideAndTop={field.CassavaPlannedCanopyCoversSideAndTop}), "
                     + $"relativeTime={relativeTimeValid}, "
                     + $"day={field.CurrentSimulationDay:0.0}, "
                     + $"cassavaCanopy={field.CassavaCanopyProgress:0.00}. {visualMetrics}",
                     field);
             }
+        }
+
+        private static void WriteValidationResult(
+            bool passed,
+            string details)
+        {
+            string projectRoot = Directory.GetParent(
+                Application.dataPath).FullName;
+            string outputDirectory = Path.Combine(
+                projectRoot,
+                "VisualVerification");
+            Directory.CreateDirectory(outputDirectory);
+            File.WriteAllText(
+                Path.Combine(outputDirectory, "MixedCropValidation.txt"),
+                $"status={(passed ? "PASS" : "FAIL")}\n{details}\n");
         }
 
         private static void MeasurePlantHeights(
