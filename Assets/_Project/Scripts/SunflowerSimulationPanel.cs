@@ -20,7 +20,7 @@ namespace ICI.PlantGrowth.Phenology
         private bool newSetupVisibleByDefault = true;
 
         [SerializeField]
-        private Vector3 menuLocalOffset = new Vector3(-1.15f, 1.35f, -0.05f);
+        private Vector3 menuLocalOffset = new Vector3(0.5f, 2.1f, -6.7f);
 
         [SerializeField, Min(0.0001f)]
         private float worldScale = 0.00075f;

@@ -11,4 +11,10 @@ EditorBuildSettings:
   - enabled: 0
     path: Assets/OutdoorsScene.unity
     guid: 8124e5870f4fd4c779e7a5f994e84ad1
-  m_configObjects: {}
+  m_configObjects:
+    com.unity.xr.arfoundation.simulation_settings: {fileID: 11400000, guid: ffeaedffd5c1c0e40a94131cb797d81c,
+      type: 2}
+    com.unity.xr.management.loader_settings: {fileID: 11400000, guid: d5f3739cc369b874c9dd28a8f0f13440,
+      type: 2}
+    com.unity.xr.openxr.settings4: {fileID: 11400000, guid: 92f63be9d5fc58d4fbdd78286d367891,
+      type: 2}
