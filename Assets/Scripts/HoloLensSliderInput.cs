@@ -63,11 +63,20 @@ public sealed class HoloLensSliderInput : MonoBehaviour,
 
         Vector2 localPoint;
         RaycastResult currentRaycast = eventData.pointerCurrentRaycast;
-        if (eventData is TrackedDeviceEventData
-            && currentRaycast.gameObject != null)
+        if (currentRaycast.gameObject != null
+            && (eventData is TrackedDeviceEventData
+                || currentRaycast.module is TrackedDeviceGraphicRaycaster)
+            && IsFinite(currentRaycast.worldPosition))
         {
             Vector3 localWorldPoint = trackRect.InverseTransformPoint(
                 currentRaycast.worldPosition);
+            localPoint = new Vector2(localWorldPoint.x, localWorldPoint.y);
+        }
+        else if (eventData is TrackedDeviceEventData trackedEventData
+            && TryGetTrackedRayPoint(trackedEventData, out Vector3 worldPoint))
+        {
+            Vector3 localWorldPoint =
+                trackRect.InverseTransformPoint(worldPoint);
             localPoint = new Vector2(localWorldPoint.x, localWorldPoint.y);
         }
         else
@@ -110,5 +119,48 @@ public sealed class HoloLensSliderInput : MonoBehaviour,
         }
 
         slider.normalizedValue = Mathf.Clamp01(normalizedValue);
+    }
+
+    private bool TryGetTrackedRayPoint(
+        TrackedDeviceEventData eventData,
+        out Vector3 worldPoint)
+    {
+        worldPoint = Vector3.zero;
+        if (eventData.rayPoints == null || eventData.rayPoints.Count < 2)
+        {
+            return false;
+        }
+
+        Plane panelPlane = new Plane(trackRect.forward, trackRect.position);
+        for (int index = 0; index < eventData.rayPoints.Count - 1; index++)
+        {
+            Vector3 start = eventData.rayPoints[index];
+            Vector3 segment = eventData.rayPoints[index + 1] - start;
+            float length = segment.magnitude;
+            if (length <= Mathf.Epsilon)
+            {
+                continue;
+            }
+
+            Ray ray = new Ray(start, segment / length);
+            if (panelPlane.Raycast(ray, out float distance)
+                && distance <= length + 0.001f)
+            {
+                worldPoint = ray.GetPoint(distance);
+                return IsFinite(worldPoint);
+            }
+        }
+
+        return false;
+    }
+
+    private static bool IsFinite(Vector3 value)
+    {
+        return !float.IsNaN(value.x)
+            && !float.IsNaN(value.y)
+            && !float.IsNaN(value.z)
+            && !float.IsInfinity(value.x)
+            && !float.IsInfinity(value.y)
+            && !float.IsInfinity(value.z);
     }
 }

@@ -379,7 +379,7 @@ MonoBehaviour:
   m_MoveDeadzone: 0.6
   m_RepeatDelay: 0.5
   m_RepeatRate: 0.1
-  m_TrackedDeviceDragThresholdMultiplier: 2
+  m_TrackedDeviceDragThresholdMultiplier: 0.25
   m_TrackedScrollDeltaMultiplier: 5
   m_BypassUIToolkitEvents: 1
   m_ActiveInputMode: 1

@@ -2,10 +2,13 @@ using UnityEditor;
 using UnityEditor.SceneManagement;
 using UnityEditor.XR.Management;
 using UnityEditor.XR.Management.Metadata;
+using UnityEditor.XR.OpenXR.Features;
 using UnityEngine;
+using UnityEngine.EventSystems;
 using UnityEngine.Rendering;
 using UnityEngine.SceneManagement;
 using UnityEngine.XR.Hands.OpenXR;
+using UnityEngine.XR.Interaction.Toolkit.UI;
 using UnityEngine.XR.Management;
 using UnityEngine.XR.OpenXR;
 using UnityEngine.XR.OpenXR.Features.Interactions;
@@ -107,8 +110,16 @@ public static class HoloLensPlantSceneSetup
             return;
         }
 
+        if (!ConfigureXrEventSystem(interactionSetup.transform))
+        {
+            return;
+        }
+
         ConfigureBuildScene();
-        ConfigureWindowsXr();
+        if (!ConfigureWindowsXr())
+        {
+            return;
+        }
 
         EditorSceneManager.MarkSceneDirty(scene);
         EditorSceneManager.SaveScene(scene, MainScenePath);
@@ -285,7 +296,54 @@ public static class HoloLensPlantSceneSetup
         };
     }
 
-    private static void ConfigureWindowsXr()
+    private static bool ConfigureXrEventSystem(Transform interactionSetup)
+    {
+        EventSystem[] eventSystems =
+            interactionSetup.GetComponentsInChildren<EventSystem>(true);
+        EventSystem xrEventSystem = null;
+        for (int index = 0; index < eventSystems.Length; index++)
+        {
+            if (eventSystems[index].GetComponent<XRUIInputModule>() != null)
+            {
+                xrEventSystem = eventSystems[index];
+                break;
+            }
+        }
+
+        if (xrEventSystem == null)
+        {
+            Debug.LogError(
+                "[HoloLens setup] MRInteractionSetup nu conține "
+                + "EventSystem cu XRUIInputModule.");
+            return false;
+        }
+
+        xrEventSystem.enabled = true;
+        xrEventSystem.pixelDragThreshold = 4;
+        XRUIInputModule inputModule =
+            xrEventSystem.GetComponent<XRUIInputModule>();
+        inputModule.enabled = true;
+        inputModule.enableXRInput = true;
+        inputModule.trackedDeviceDragThresholdMultiplier = 0.25f;
+
+        EventSystem[] allEventSystems =
+            Object.FindObjectsOfType<EventSystem>(true);
+        for (int index = 0; index < allEventSystems.Length; index++)
+        {
+            EventSystem duplicate = allEventSystems[index];
+            if (duplicate != xrEventSystem)
+            {
+                duplicate.enabled = false;
+                EditorUtility.SetDirty(duplicate);
+            }
+        }
+
+        EditorUtility.SetDirty(xrEventSystem);
+        EditorUtility.SetDirty(inputModule);
+        return true;
+    }
+
+    private static bool ConfigureWindowsXr()
     {
         XRGeneralSettingsPerBuildTarget perTarget =
             AssetDatabase.LoadAssetAtPath<XRGeneralSettingsPerBuildTarget>(
@@ -294,7 +352,7 @@ public static class HoloLensPlantSceneSetup
         {
             Debug.LogError(
                 "[HoloLens setup] Lipsește configurația XR generală.");
-            return;
+            return false;
         }
 
         if (!perTarget.HasManagerSettingsForBuildTarget(
@@ -314,25 +372,42 @@ public static class HoloLensPlantSceneSetup
         EditorUtility.SetDirty(generalSettings);
         EditorUtility.SetDirty(perTarget);
 
+        FeatureHelpers.RefreshFeatures(BuildTargetGroup.WSA);
         OpenXRSettings openXrSettings =
             OpenXRSettings.GetSettingsForBuildTargetGroup(
                 BuildTargetGroup.WSA);
-        if (openXrSettings != null)
+        if (openXrSettings == null)
         {
-            EnableFeature<MicrosoftHandInteraction>(openXrSettings);
-            EnableFeature<HandInteractionProfile>(openXrSettings);
-            EnableFeature<HandTracking>(openXrSettings);
-            EnableFeature<EyeGazeInteraction>(openXrSettings);
-            EnableFeature<MicrosoftMotionControllerProfile>(
-                openXrSettings);
-            openXrSettings.depthSubmissionMode =
-                OpenXRSettings.DepthSubmissionMode.Depth16Bit;
-            EditorUtility.SetDirty(openXrSettings);
+            Debug.LogError(
+                "[HoloLens setup] Lipsește profilul OpenXR Metro/WSA. "
+                + "Instalează modulul Windows Build Support și reaplică "
+                + "setările HoloLens.");
+            return false;
         }
+
+        bool handFeaturesReady =
+            EnableFeature<MicrosoftHandInteraction>(openXrSettings)
+            & EnableFeature<HandInteractionProfile>(openXrSettings)
+            & EnableFeature<HandTracking>(openXrSettings);
+        EnableFeature<EyeGazeInteraction>(openXrSettings);
+        EnableFeature<MicrosoftMotionControllerProfile>(openXrSettings);
+        if (!handFeaturesReady)
+        {
+            Debug.LogError(
+                "[HoloLens setup] Profilurile OpenXR de mână nu au putut "
+                + "fi activate.");
+            return false;
+        }
+
+        openXrSettings.depthSubmissionMode =
+            OpenXRSettings.DepthSubmissionMode.Depth16Bit;
+        EditorUtility.SetDirty(openXrSettings);
 
         PlayerSettings.companyName = CompanyName;
         PlayerSettings.productName = ProductName;
-        PlayerSettings.runInBackground = false;
+        // Required by Unity OpenXR on HoloLens when the legacy Microsoft
+        // Mixed Reality OpenXR extension package is not installed.
+        PlayerSettings.runInBackground = true;
         PlayerSettings.WSA.transparentSwapchain = false;
         PlayerSettings.WSA.packageName = PackageName;
         PlayerSettings.WSA.applicationDescription =
@@ -368,9 +443,10 @@ public static class HoloLensPlantSceneSetup
         PlayerSettings.SetGraphicsAPIs(
             BuildTarget.WSAPlayer,
             new[] { GraphicsDeviceType.Direct3D11 });
+        return true;
     }
 
-    private static void EnableFeature<TFeature>(
+    private static bool EnableFeature<TFeature>(
         OpenXRSettings settings)
         where TFeature : UnityEngine.XR.OpenXR.Features.OpenXRFeature
     {
@@ -380,10 +456,11 @@ public static class HoloLensPlantSceneSetup
             Debug.LogWarning(
                 $"[HoloLens setup] Funcția OpenXR {typeof(TFeature).Name} "
                 + "nu există în profilul Windows.");
-            return;
+            return false;
         }
 
         feature.enabled = true;
         EditorUtility.SetDirty(feature);
+        return true;
     }
 }

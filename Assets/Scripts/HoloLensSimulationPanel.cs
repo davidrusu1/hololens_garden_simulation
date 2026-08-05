@@ -3,6 +3,7 @@ using UnityEngine;
 using UnityEngine.EventSystems;
 using UnityEngine.InputSystem;
 using UnityEngine.UI;
+using UnityEngine.XR.Interaction.Toolkit.Interactors;
 using UnityEngine.XR.Interaction.Toolkit.UI;
 
 [DefaultExecutionOrder(-500)]
@@ -50,6 +51,8 @@ public sealed class HoloLensSimulationPanel : MonoBehaviour
     private Slider maximumTemperatureSlider;
     private HoloLensPlantPresentation presentation;
     private MapleSimulationPanel legacyPanel;
+    private EventSystem configuredEventSystem;
+    private XRUIInputModule configuredInputModule;
 
     private static readonly Color PanelColor =
         new Color(0.98f, 0.985f, 0.975f, 0.98f);
@@ -629,11 +632,8 @@ public sealed class HoloLensSimulationPanel : MonoBehaviour
     {
         EventSystem[] sceneEventSystems =
             FindObjectsOfType<EventSystem>(true);
-        EventSystem eventSystem = EventSystem.current;
-        if (eventSystem == null && sceneEventSystems.Length > 0)
-        {
-            eventSystem = sceneEventSystems[0];
-        }
+        EventSystem eventSystem = FindPreferredEventSystem(
+            sceneEventSystems);
 
         if (eventSystem == null)
         {
@@ -643,6 +643,7 @@ public sealed class HoloLensSimulationPanel : MonoBehaviour
             eventSystem = eventSystemObject.GetComponent<EventSystem>();
         }
 
+        eventSystem.enabled = true;
         for (int index = 0; index < sceneEventSystems.Length; index++)
         {
             EventSystem duplicate = sceneEventSystems[index];
@@ -651,6 +652,11 @@ public sealed class HoloLensSimulationPanel : MonoBehaviour
                 duplicate.enabled = false;
             }
         }
+
+        // XRI registers hand interactors against EventSystem.current. The
+        // template scene may contain a legacy EventSystem on the XR camera, so
+        // make the EventSystem that owns XRUIInputModule deterministic.
+        EventSystem.current = eventSystem;
 
         XRUIInputModule inputModule =
             eventSystem.GetComponent<XRUIInputModule>();
@@ -665,12 +671,106 @@ public sealed class HoloLensSimulationPanel : MonoBehaviour
             inputModule = eventSystem.gameObject.AddComponent<XRUIInputModule>();
         }
 
+        BaseInputModule[] modules =
+            eventSystem.GetComponents<BaseInputModule>();
+        for (int index = 0; index < modules.Length; index++)
+        {
+            if (modules[index] != inputModule)
+            {
+                modules[index].enabled = false;
+            }
+        }
+
+        inputModule.enabled = true;
         inputModule.enableXRInput = true;
         inputModule.trackedDeviceDragThresholdMultiplier = 0.25f;
         eventSystem.pixelDragThreshold = 4;
 #if UNITY_EDITOR
         inputModule.enableMouseInput = true;
 #endif
+
+        if (configuredEventSystem != eventSystem
+            || configuredInputModule != inputModule)
+        {
+            configuredEventSystem = eventSystem;
+            configuredInputModule = inputModule;
+            RegisterActiveInteractorsWithUi();
+        }
+    }
+
+    private static EventSystem FindPreferredEventSystem(
+        EventSystem[] eventSystems)
+    {
+        // Prefer the MR template EventSystem because the hand interactors
+        // register with its XRUIInputModule during OnEnable.
+        for (int index = 0; index < eventSystems.Length; index++)
+        {
+            EventSystem candidate = eventSystems[index];
+            if (candidate != null
+                && candidate.gameObject.activeInHierarchy
+                && candidate.GetComponent<XRUIInputModule>() != null)
+            {
+                return candidate;
+            }
+        }
+
+        EventSystem current = EventSystem.current;
+        if (current != null && current.gameObject.activeInHierarchy)
+        {
+            return current;
+        }
+
+        for (int index = 0; index < eventSystems.Length; index++)
+        {
+            EventSystem candidate = eventSystems[index];
+            if (candidate != null && candidate.gameObject.activeInHierarchy)
+            {
+                return candidate;
+            }
+        }
+
+        return null;
+    }
+
+    private static void RegisterActiveInteractorsWithUi()
+    {
+        NearFarInteractor[] nearFarInteractors =
+            FindObjectsOfType<NearFarInteractor>(true);
+        for (int index = 0; index < nearFarInteractors.Length; index++)
+        {
+            NearFarInteractor interactor = nearFarInteractors[index];
+            if (interactor != null && interactor.isActiveAndEnabled)
+            {
+                // Toggling forces XRI to leave a stale input module and
+                // register again with the XR EventSystem selected above.
+                interactor.enableUIInteraction = false;
+                interactor.enableUIInteraction = true;
+            }
+        }
+
+        XRRayInteractor[] rayInteractors =
+            FindObjectsOfType<XRRayInteractor>(true);
+        for (int index = 0; index < rayInteractors.Length; index++)
+        {
+            XRRayInteractor interactor = rayInteractors[index];
+            if (interactor != null && interactor.isActiveAndEnabled)
+            {
+                interactor.enableUIInteraction = false;
+                interactor.enableUIInteraction = true;
+            }
+        }
+
+        XRPokeInteractor[] pokeInteractors =
+            FindObjectsOfType<XRPokeInteractor>(true);
+        for (int index = 0; index < pokeInteractors.Length; index++)
+        {
+            XRPokeInteractor interactor = pokeInteractors[index];
+            if (interactor != null && interactor.isActiveAndEnabled)
+            {
+                interactor.enableUIInteraction = false;
+                interactor.enableUIInteraction = true;
+            }
+        }
     }
 
     public void ToggleSetup()
