@@ -1,0 +1,20 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg"
+     width="106.666mm"
+     height="106.666mm"
+     viewBox="0 0 8 8"
+     shape-rendering="crispEdges">
+  <!-- The black 6x6 marker square measures exactly 80 mm. The surrounding
+       one-cell white quiet zone must remain visible when printing. -->
+  <rect x="0" y="0" width="8" height="8" fill="#ffffff"/>
+  <rect x="1" y="1" width="6" height="6" fill="#000000"/>
+  <!-- OpenCV DICT_4X4_50, marker ID 0: 1011 / 0101 / 0011 / 0010 -->
+  <rect x="2" y="2" width="1" height="1" fill="#ffffff"/>
+  <rect x="4" y="2" width="1" height="1" fill="#ffffff"/>
+  <rect x="5" y="2" width="1" height="1" fill="#ffffff"/>
+  <rect x="3" y="3" width="1" height="1" fill="#ffffff"/>
+  <rect x="5" y="3" width="1" height="1" fill="#ffffff"/>
+  <rect x="4" y="4" width="1" height="1" fill="#ffffff"/>
+  <rect x="5" y="4" width="1" height="1" fill="#ffffff"/>
+  <rect x="4" y="5" width="1" height="1" fill="#ffffff"/>
+</svg>
