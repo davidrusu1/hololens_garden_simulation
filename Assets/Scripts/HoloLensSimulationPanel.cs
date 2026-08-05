@@ -418,7 +418,7 @@ public sealed class HoloLensSimulationPanel : MonoBehaviour
             sliderObject.transform);
         RectTransform backgroundRect =
             backgroundObject.GetComponent<RectTransform>();
-        SetCenteredStretch(backgroundRect, 14f, 8f);
+        SetCenteredStretch(backgroundRect, 14f, 24f);
         Image background = backgroundObject.AddComponent<Image>();
         background.color = TrackColor;
 
@@ -455,7 +455,7 @@ public sealed class HoloLensSimulationPanel : MonoBehaviour
             handleAreaObject.transform);
         RectTransform handleRect =
             handleObject.GetComponent<RectTransform>();
-        handleRect.sizeDelta = new Vector2(36f, 36f);
+        handleRect.sizeDelta = new Vector2(44f, 44f);
         Image handle = handleObject.AddComponent<Image>();
         handle.color = SectionColor;
 
@@ -472,6 +472,10 @@ public sealed class HoloLensSimulationPanel : MonoBehaviour
             valueText.text = FormatValue(value, unit);
             onChanged?.Invoke(value);
         });
+
+        HoloLensSliderInput holoLensInput =
+            sliderObject.AddComponent<HoloLensSliderInput>();
+        holoLensInput.Initialize(slider, sliderRect);
         return slider;
     }
 
@@ -623,13 +627,29 @@ public sealed class HoloLensSimulationPanel : MonoBehaviour
 
     private void ConfigureEventSystem()
     {
+        EventSystem[] sceneEventSystems =
+            FindObjectsOfType<EventSystem>(true);
         EventSystem eventSystem = EventSystem.current;
+        if (eventSystem == null && sceneEventSystems.Length > 0)
+        {
+            eventSystem = sceneEventSystems[0];
+        }
+
         if (eventSystem == null)
         {
             GameObject eventSystemObject = new GameObject(
                 "XR EventSystem",
                 typeof(EventSystem));
             eventSystem = eventSystemObject.GetComponent<EventSystem>();
+        }
+
+        for (int index = 0; index < sceneEventSystems.Length; index++)
+        {
+            EventSystem duplicate = sceneEventSystems[index];
+            if (duplicate != null && duplicate != eventSystem)
+            {
+                duplicate.enabled = false;
+            }
         }
 
         XRUIInputModule inputModule =
@@ -646,6 +666,8 @@ public sealed class HoloLensSimulationPanel : MonoBehaviour
         }
 
         inputModule.enableXRInput = true;
+        inputModule.trackedDeviceDragThresholdMultiplier = 0.25f;
+        eventSystem.pixelDragThreshold = 4;
 #if UNITY_EDITOR
         inputModule.enableMouseInput = true;
 #endif
