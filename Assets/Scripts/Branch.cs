@@ -126,7 +126,7 @@ public sealed class Branch : MonoBehaviour
     [Range(0.35f, 0.95f)]
     public float childLengthMultiplier = 0.8f;
 
-    [Range(1f, 1.4f)]
+    [Range(0.8f, 1.4f)]
     [Tooltip("Keeps the requested first-order length while later orders use the original recursive length ratio.")]
     public float primaryBranchLengthBoost = 1.05f;
 
@@ -1392,10 +1392,10 @@ public sealed class Branch : MonoBehaviour
 
             // Preserve the original staged rhythm: the next sibling stem is
             // not created until the current child finishes growing.
-            while (newScript.isActiveAndEnabled && !newScript.maxed)
-            {
-                yield return null;
-            }
+            //while (newScript.isActiveAndEnabled && !newScript.maxed)
+            //{
+            //    yield return null;
+            //}
 
             if (delayBranches > 0f)
             {
@@ -2426,7 +2426,7 @@ public sealed class Branch : MonoBehaviour
             for (int i = 0; i < rosetteLeaves; i++)
             {
                 float tipAzimuth = tipAzimuthBase + i * (360f / rosetteLeaves) + Random.Range(-15f, 15f);
-                CreateLeaf(nextLeafIndex + i, maximumLeafHeight, 1f, tipAzimuth);
+                CreateLeaf(nextLeafIndex + i, fullHeight + 0.02f, 1f, tipAzimuth);
             }
 
             leafSpawningComplete = true;
@@ -2638,7 +2638,7 @@ public sealed class Branch : MonoBehaviour
             0.95f);
         primaryBranchLengthBoost = Mathf.Clamp(
             primaryBranchLengthBoost,
-            1f,
+            0.8f,
             1.4f);
         ClampCrownFillerRange(
             ref crownFillerBranchesMin,

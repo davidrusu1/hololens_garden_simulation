@@ -80,7 +80,7 @@ PlayerSettings:
   androidPredictiveBackSupport: 1
   defaultIsNativeResolution: 1
   macRetinaSupport: 1
-  runInBackground: 1
+  runInBackground: 0
   captureSingleScreen: 0
   muteOtherAudioSources: 0
   Prepare IOS For Recording: 0
@@ -144,9 +144,9 @@ PlayerSettings:
   bundleVersion: 1.0.0
   preloadedAssets:
   - {fileID: 11400000, guid: f8a442de0c8906f4d9c00184993fc289, type: 2}
-  - {fileID: -4637038883354861042, guid: 68b8576ba099b294d90889251a4a15ba, type: 2}
   - {fileID: 11400000, guid: 56a98106ce58f09459a9990007b50acb, type: 2}
-  - {fileID: 6482856677600133674, guid: 8b07288ba6be24e448175f41e3629239, type: 2}
+  - {fileID: 5721753461630757671, guid: 68b8576ba099b294d90889251a4a15ba, type: 2}
+  - {fileID: -6553014146567279846, guid: 8b07288ba6be24e448175f41e3629239, type: 2}
   metroInputSource: 0
   wsaTransparentSwapchain: 0
   m_HolographicPauseOnTrackingLoss: 1
@@ -507,7 +507,7 @@ PlayerSettings:
   - m_BuildTarget: Switch
     m_GraphicsJobs: 1
   - m_BuildTarget: MetroSupport
-    m_GraphicsJobs: 1
+    m_GraphicsJobs: 0
   - m_BuildTarget: AppleTVSupport
     m_GraphicsJobs: 0
   - m_BuildTarget: BJMSupport
@@ -853,7 +853,7 @@ PlayerSettings:
   managedStrippingLevel: {}
   incrementalIl2cppBuild: {}
   suppressCommonWarnings: 1
-  allowUnsafeCode: 0
+  allowUnsafeCode: 1
   useDeterministicCompilation: 1
   additionalIl2CppArgs: 
   scriptingRuntimeVersion: 1
@@ -864,11 +864,11 @@ PlayerSettings:
   m_MobileRenderingPath: 1
   metroPackageName: ICI.MapleGrowthSimulation
   metroPackageVersion: 1.0.0.0
-  metroCertificatePath: 
+  metroCertificatePath: Assets/WSATestCertificate.pfx
   metroCertificatePassword: 
-  metroCertificateSubject: 
-  metroCertificateIssuer: 
-  metroCertificateNotAfter: 0000000000000000
+  metroCertificateSubject: ICI
+  metroCertificateIssuer: ICI
+  metroCertificateNotAfter: 0075f5b42242de01
   metroApplicationDescription: Real-time maple growth simulation for HoloLens 2.
   wsaImages: {}
   metroTileShortName: Maple Growth

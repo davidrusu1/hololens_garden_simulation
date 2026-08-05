@@ -130,11 +130,12 @@ public sealed class PlantLSystem : MonoBehaviour
         }
 
         int childCount = GetChildCount(parentStem, childOrder);
-        int crownFillerCount = parentStem.currGen == 0
-            ? NextInclusive(
-                parentStem.crownFillerBranchesMin,
-                parentStem.crownFillerBranchesMax)
-            : 0;
+        //int crownFillerCount = parentStem.currGen == 0
+        //    ? NextInclusive(
+        //        parentStem.crownFillerBranchesMin,
+        //        parentStem.crownFillerBranchesMax)
+        //    : 0;
+        int crownFillerCount = parentStem.currGen == 0 ? 6 : 0;
         int totalChildCount = childCount + crownFillerCount;
         if (totalChildCount <= 0)
         {
