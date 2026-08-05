@@ -28,6 +28,23 @@ MonoBehaviour:
   m_EditorClassIdentifier: 
   m_LoaderManagerInstance: {fileID: 8513138751879813168}
   m_InitManagerOnStart: 1
+--- !u!114 &-1973412069533591137
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: f4c3631f5e58749a59194e0cf6baf6d5, type: 3}
+  m_Name: Metro Providers
+  m_EditorClassIdentifier: 
+  m_RequiresSettingsUpdate: 0
+  m_AutomaticLoading: 0
+  m_AutomaticRunning: 0
+  m_Loaders:
+  - {fileID: 11400000, guid: b6707f480904c9b42942bee6629530c4, type: 2}
 --- !u!114 &11400000
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -44,7 +61,7 @@ MonoBehaviour:
   Values:
   - {fileID: -2395357231294768796}
   - {fileID: -4637038883354861042}
-  - {fileID: 9014777814835174781}
+  - {fileID: 5721753461630757671}
 --- !u!114 &1435187559740424511
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -62,7 +79,7 @@ MonoBehaviour:
   m_AutomaticRunning: 0
   m_Loaders:
   - {fileID: 11400000, guid: b6707f480904c9b42942bee6629530c4, type: 2}
---- !u!114 &4725932270745778832
+--- !u!114 &5721753461630757671
 MonoBehaviour:
   m_ObjectHideFlags: 0
   m_CorrespondingSourceObject: {fileID: 0}
@@ -71,14 +88,11 @@ MonoBehaviour:
   m_GameObject: {fileID: 0}
   m_Enabled: 1
   m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: f4c3631f5e58749a59194e0cf6baf6d5, type: 3}
-  m_Name: Metro Providers
+  m_Script: {fileID: 11500000, guid: d236b7d11115f2143951f1e14045df39, type: 3}
+  m_Name: Metro Settings
   m_EditorClassIdentifier: 
-  m_RequiresSettingsUpdate: 0
-  m_AutomaticLoading: 0
-  m_AutomaticRunning: 0
-  m_Loaders:
-  - {fileID: 11400000, guid: b6707f480904c9b42942bee6629530c4, type: 2}
+  m_LoaderManagerInstance: {fileID: -1973412069533591137}
+  m_InitManagerOnStart: 1
 --- !u!114 &8513138751879813168
 MonoBehaviour:
   m_ObjectHideFlags: 0
