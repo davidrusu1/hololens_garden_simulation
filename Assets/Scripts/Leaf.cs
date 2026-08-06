@@ -5,6 +5,10 @@ using UnityEngine;
 [DefaultExecutionOrder(50)]
 public sealed class Leaf : MonoBehaviour
 {
+    private static readonly int BaseColorProperty = Shader.PropertyToID("_BaseColor");
+    private static readonly int ColorProperty = Shader.PropertyToID("_Color");
+    private static readonly int EmissionColorProperty =
+        Shader.PropertyToID("_EmissionColor");
     private static Material sharedLeafMaterial;
     private static Material sharedPetioleMaterial;
     private static Material sharedVeinMaterial;
@@ -16,6 +20,17 @@ public sealed class Leaf : MonoBehaviour
     private Mesh bladeMesh;
     private Mesh veinMesh;
     private float nextOrientationUpdateAt;
+    private Renderer bladeRenderer;
+    private Renderer petioleRenderer;
+    private Renderer veinRenderer;
+    private MaterialPropertyBlock seasonalProperties;
+    private Color initialLeafColor;
+    private Color initialStemColor;
+    private float seasonalVariation;
+    private float seasonalFallThreshold;
+    private bool seasonalFallStarted;
+
+    public bool SeasonalFallStarted => seasonalFallStarted;
 
     public void Initialize(
         float length,
@@ -27,6 +42,13 @@ public sealed class Leaf : MonoBehaviour
     {
         supportingBranch = GetComponentInParent<Branch>();
         mapleSimulation = GetComponentInParent<Plant>();
+        initialLeafColor = leafColor;
+        initialStemColor = stemColor;
+        seasonalVariation = CreateStableVariation(GetInstanceID(), 0.17f);
+        seasonalFallThreshold = Mathf.Lerp(
+            0.08f,
+            0.94f,
+            CreateStableVariation(GetInstanceID(), 0.73f));
         Vector3 initialDirection = transform.right.normalized;
         horizontalGrowthDirection = Vector3.ProjectOnPlane(
             initialDirection,
@@ -71,6 +93,7 @@ public sealed class Leaf : MonoBehaviour
         lightExposure.Initialize(blade, growthDuration);
 
         transform.localScale = Vector3.one;
+        mapleSimulation?.RegisterLeaf(this);
         StartCoroutine(Grow(growthDuration, petioleGrowth, blade, bladeStart));
     }
 
@@ -134,12 +157,12 @@ public sealed class Leaf : MonoBehaviour
             Destroy(petioleCollider);
         }
 
-        Renderer renderer = petiole.GetComponent<Renderer>();
-        renderer.sharedMaterial = GetOrCreateMaterial(
+        petioleRenderer = petiole.GetComponent<Renderer>();
+        petioleRenderer.sharedMaterial = GetOrCreateMaterial(
             ref sharedPetioleMaterial,
             stemColor,
             false);
-        PlantVisualQuality.ApplyRenderer(renderer);
+        PlantVisualQuality.ApplyRenderer(petioleRenderer);
         return growthRoot;
     }
 
@@ -154,7 +177,7 @@ public sealed class Leaf : MonoBehaviour
         blade.transform.localPosition = Vector3.right * bladeStart;
 
         var filter = blade.AddComponent<MeshFilter>();
-        var renderer = blade.AddComponent<MeshRenderer>();
+        bladeRenderer = blade.AddComponent<MeshRenderer>();
         float bladeThickness = Mathf.Clamp(
             length * 0.018f,
             0.004f,
@@ -164,7 +187,7 @@ public sealed class Leaf : MonoBehaviour
             width,
             bladeThickness);
         filter.sharedMesh = bladeMesh;
-        renderer.sharedMaterial = GetOrCreateMaterial(
+        bladeRenderer.sharedMaterial = GetOrCreateMaterial(
             ref sharedLeafMaterial,
             leafColor,
             true);
@@ -174,7 +197,7 @@ public sealed class Leaf : MonoBehaviour
             width,
             bladeThickness,
             Color.Lerp(leafColor, new Color(0.025f, 0.12f, 0.035f, 1f), 0.55f));
-        PlantVisualQuality.ApplyRenderer(renderer);
+        PlantVisualQuality.ApplyRenderer(bladeRenderer);
         return blade.transform;
     }
 
@@ -318,7 +341,7 @@ public sealed class Leaf : MonoBehaviour
         return circularSag + sideCup;
     }
 
-    private static Mesh CreateMapleVeins(
+    private Mesh CreateMapleVeins(
         Transform blade,
         float length,
         float width,
@@ -331,7 +354,7 @@ public sealed class Leaf : MonoBehaviour
             * (bladeThickness * 0.5f + 0.002f);
 
         var filter = veinObject.AddComponent<MeshFilter>();
-        var renderer = veinObject.AddComponent<MeshRenderer>();
+        veinRenderer = veinObject.AddComponent<MeshRenderer>();
         Vector3 veinOrigin = new Vector3(
             length * 0.025f,
             GetLeafSurfaceHeight(length, width, length * 0.025f, 0f),
@@ -377,12 +400,148 @@ public sealed class Leaf : MonoBehaviour
         mesh.RecalculateNormals();
         mesh.RecalculateBounds();
         filter.sharedMesh = mesh;
-        renderer.sharedMaterial = GetOrCreateMaterial(
+        veinRenderer.sharedMaterial = GetOrCreateMaterial(
             ref sharedVeinMaterial,
             veinColor,
             true);
-        PlantVisualQuality.ApplyRenderer(renderer);
+        PlantVisualQuality.ApplyRenderer(veinRenderer);
         return mesh;
+    }
+
+    public void ApplySeason(float autumnProgress, float fallProgress)
+    {
+        float variedProgress = Mathf.Clamp01(
+            autumnProgress * 1.18f - seasonalVariation * 0.18f);
+        float smoothProgress = Mathf.SmoothStep(0f, 1f, variedProgress);
+        Color seasonalLeafColor = EvaluateAutumnColor(smoothProgress);
+        Color seasonalVeinColor = Color.Lerp(
+            Color.Lerp(
+                initialLeafColor,
+                new Color(0.025f, 0.12f, 0.035f, 1f),
+                0.55f),
+            new Color(0.22f, 0.035f, 0.018f, 1f),
+            smoothProgress);
+        Color seasonalStemColor = Color.Lerp(
+            initialStemColor,
+            new Color(0.30f, 0.075f, 0.025f, 1f),
+            smoothProgress);
+
+        SetRendererColor(bladeRenderer, seasonalLeafColor, true);
+        SetRendererColor(veinRenderer, seasonalVeinColor, true);
+        SetRendererColor(petioleRenderer, seasonalStemColor, false);
+
+        if (!seasonalFallStarted
+            && fallProgress >= seasonalFallThreshold
+            && Application.isPlaying)
+        {
+            StartCoroutine(FallFromTree());
+        }
+    }
+
+    private Color EvaluateAutumnColor(float progress)
+    {
+        Color gold = Color.Lerp(
+            new Color(0.95f, 0.52f, 0.035f, 1f),
+            new Color(0.98f, 0.69f, 0.08f, 1f),
+            seasonalVariation);
+        Color crimson = Color.Lerp(
+            new Color(0.72f, 0.055f, 0.025f, 1f),
+            new Color(0.88f, 0.12f, 0.035f, 1f),
+            seasonalVariation);
+        Color deepRed = Color.Lerp(
+            new Color(0.38f, 0.025f, 0.018f, 1f),
+            new Color(0.58f, 0.045f, 0.02f, 1f),
+            seasonalVariation);
+
+        if (progress < 0.42f)
+        {
+            return Color.Lerp(initialLeafColor, gold, progress / 0.42f);
+        }
+
+        if (progress < 0.78f)
+        {
+            return Color.Lerp(gold, crimson, (progress - 0.42f) / 0.36f);
+        }
+
+        return Color.Lerp(crimson, deepRed, (progress - 0.78f) / 0.22f);
+    }
+
+    private void SetRendererColor(
+        Renderer targetRenderer,
+        Color color,
+        bool illuminateBothSides)
+    {
+        if (targetRenderer == null)
+        {
+            return;
+        }
+
+        seasonalProperties ??= new MaterialPropertyBlock();
+        targetRenderer.GetPropertyBlock(seasonalProperties);
+        seasonalProperties.SetColor(BaseColorProperty, color);
+        seasonalProperties.SetColor(ColorProperty, color);
+        if (illuminateBothSides)
+        {
+            seasonalProperties.SetColor(
+                EmissionColorProperty,
+                new Color(
+                    color.r * 0.22f,
+                    color.g * 0.22f,
+                    color.b * 0.22f,
+                    color.a));
+        }
+
+        targetRenderer.SetPropertyBlock(seasonalProperties);
+    }
+
+    private IEnumerator FallFromTree()
+    {
+        seasonalFallStarted = true;
+        LeafLightExposure exposure = GetComponent<LeafLightExposure>();
+        exposure?.PrepareForSeasonalFall();
+
+        supportingBranch = null;
+        transform.SetParent(null, true);
+        Vector3 startPosition = transform.position;
+        Quaternion startRotation = transform.rotation;
+        float fallDuration = Mathf.Lerp(1.6f, 2.5f, seasonalVariation);
+        float fallDistance = Mathf.Lerp(1.25f, 2.1f, seasonalVariation);
+        Vector3 sidewaysDrift = new Vector3(
+            Mathf.Lerp(-0.32f, 0.32f, seasonalVariation),
+            0f,
+            Mathf.Lerp(0.24f, -0.24f, seasonalVariation));
+        Vector3 tumbleAxis = new Vector3(
+            0.65f + seasonalVariation,
+            1f,
+            0.45f - seasonalVariation * 0.25f).normalized;
+        float elapsed = 0f;
+
+        while (elapsed < fallDuration)
+        {
+            elapsed += Time.deltaTime;
+            float progress = Mathf.Clamp01(elapsed / fallDuration);
+            float easedFall = progress * progress;
+            float flutter = Mathf.Sin(progress * Mathf.PI * 6f
+                + seasonalVariation * Mathf.PI * 2f);
+            transform.position = startPosition
+                + sidewaysDrift * progress
+                + Vector3.right * (flutter * 0.045f)
+                + Vector3.down * (fallDistance * easedFall);
+            transform.rotation = Quaternion.AngleAxis(
+                    progress * Mathf.Lerp(420f, 760f, seasonalVariation),
+                    tumbleAxis)
+                * startRotation;
+            yield return null;
+        }
+
+        Destroy(gameObject);
+    }
+
+    private static float CreateStableVariation(int instanceId, float salt)
+    {
+        float value = Mathf.Sin((instanceId + salt * 1000f) * 12.9898f)
+            * 43758.5453f;
+        return Mathf.Repeat(value, 1f);
     }
 
     private static Vector3 CreateSurfacePoint(
@@ -512,6 +671,7 @@ public sealed class Leaf : MonoBehaviour
 
     private void OnDestroy()
     {
+        mapleSimulation?.UnregisterLeaf(this);
         Branch.InvalidateSupportedWeightCache();
         if (bladeMesh != null)
         {

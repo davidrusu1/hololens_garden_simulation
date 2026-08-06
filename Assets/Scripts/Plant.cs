@@ -1,5 +1,14 @@
 using System.Collections;
+using System.Collections.Generic;
 using UnityEngine;
+
+public enum MapleSeason
+{
+    Spring,
+    Summer,
+    Autumn,
+    Winter
+}
 
 [DisallowMultipleComponent]
 public sealed class Plant : MonoBehaviour
@@ -36,6 +45,19 @@ public sealed class Plant : MonoBehaviour
 
     [SerializeField, Min(1f)]
     private float thermalTimeCrownExpansionToMaturity = 780f;
+
+    [Header("Maple seasons (DVS-driven)")]
+    [SerializeField, Range(0f, 2f)]
+    private float summerStartsAtDvs = 0.65f;
+
+    [SerializeField, Range(0f, 2f)]
+    private float autumnStartsAtDvs = 1.35f;
+
+    [SerializeField, Range(0f, 2f)]
+    private float leafFallStartsAtDvs = 1.62f;
+
+    [SerializeField, Range(0f, 2f)]
+    private float winterStartsAtDvs = 1.92f;
 
     [Header("Assimilation and respiration")]
     [SerializeField, Range(0.01f, 0.5f)]
@@ -113,7 +135,17 @@ public sealed class Plant : MonoBehaviour
     [SerializeField]
     private float dailyRootGrowth;
 
+    [SerializeField]
+    private MapleSeason currentSeason = MapleSeason.Spring;
+
+    [SerializeField, Range(0f, 1f)]
+    private float autumnColorProgress;
+
+    [SerializeField, Range(0f, 1f)]
+    private float leafFallProgress;
+
     private Coroutine simulationRoutine;
+    private readonly List<Leaf> registeredLeaves = new List<Leaf>();
 
     public bool SimulationRunning => simulationRunning;
     public int SimulatedDay => simulatedDay;
@@ -134,6 +166,10 @@ public sealed class Plant : MonoBehaviour
     public float SecondsPerSimulatedDay => secondsPerSimulatedDay;
     public float PlaybackSpeed => playbackSpeed;
     public bool LiteModeEnabled => liteModeEnabled;
+    public MapleSeason CurrentSeason => currentSeason;
+    public float AutumnColorProgress => autumnColorProgress;
+    public float LeafFallProgress => leafFallProgress;
+    public string CurrentSeasonLabel => GetSeasonLabel(currentSeason);
     public float BiologicalStructuralGrowthRateMultiplier { get; private set; } = 1f;
     public float BiologicalLeafGrowthRateMultiplier { get; private set; } = 1f;
     public float StructuralGrowthRateMultiplier =>
@@ -225,6 +261,26 @@ public sealed class Plant : MonoBehaviour
         dailyRootGrowth = 0f;
         BiologicalStructuralGrowthRateMultiplier = 0.45f;
         BiologicalLeafGrowthRateMultiplier = 0.55f;
+        UpdateSeasonalState();
+    }
+
+    public void RegisterLeaf(Leaf leaf)
+    {
+        if (leaf == null || registeredLeaves.Contains(leaf))
+        {
+            return;
+        }
+
+        registeredLeaves.Add(leaf);
+        leaf.ApplySeason(autumnColorProgress, leafFallProgress);
+    }
+
+    public void UnregisterLeaf(Leaf leaf)
+    {
+        if (leaf != null)
+        {
+            registeredLeaves.Remove(leaf);
+        }
     }
 
     public void SetEnvironment(
@@ -339,6 +395,69 @@ public sealed class Plant : MonoBehaviour
             0.4f,
             1.5f,
             Mathf.Clamp01(normalizedLeafGrowth));
+        UpdateSeasonalState();
+    }
+
+    private void UpdateSeasonalState()
+    {
+        if (developmentStage < summerStartsAtDvs)
+        {
+            currentSeason = MapleSeason.Spring;
+        }
+        else if (developmentStage < autumnStartsAtDvs)
+        {
+            currentSeason = MapleSeason.Summer;
+        }
+        else if (developmentStage < winterStartsAtDvs)
+        {
+            currentSeason = MapleSeason.Autumn;
+        }
+        else
+        {
+            currentSeason = MapleSeason.Winter;
+        }
+
+        autumnColorProgress = Mathf.SmoothStep(
+            0f,
+            1f,
+            Mathf.InverseLerp(
+                autumnStartsAtDvs,
+                winterStartsAtDvs,
+                developmentStage));
+        leafFallProgress = Mathf.SmoothStep(
+            0f,
+            1f,
+            Mathf.InverseLerp(
+                leafFallStartsAtDvs,
+                2f,
+                developmentStage));
+
+        for (int index = registeredLeaves.Count - 1; index >= 0; index--)
+        {
+            Leaf leaf = registeredLeaves[index];
+            if (leaf == null)
+            {
+                registeredLeaves.RemoveAt(index);
+                continue;
+            }
+
+            leaf.ApplySeason(autumnColorProgress, leafFallProgress);
+        }
+    }
+
+    private static string GetSeasonLabel(MapleSeason season)
+    {
+        switch (season)
+        {
+            case MapleSeason.Summer:
+                return "Vară";
+            case MapleSeason.Autumn:
+                return "Toamnă";
+            case MapleSeason.Winter:
+                return "Iarnă";
+            default:
+                return "Primăvară";
+        }
     }
 
     private IEnumerator RunDailySimulation()
@@ -448,6 +567,19 @@ public sealed class Plant : MonoBehaviour
         thermalTimeCrownExpansionToMaturity = Mathf.Max(
             1f,
             thermalTimeCrownExpansionToMaturity);
+        summerStartsAtDvs = Mathf.Clamp(summerStartsAtDvs, 0f, 1.5f);
+        autumnStartsAtDvs = Mathf.Clamp(
+            autumnStartsAtDvs,
+            summerStartsAtDvs + 0.05f,
+            1.8f);
+        leafFallStartsAtDvs = Mathf.Clamp(
+            leafFallStartsAtDvs,
+            autumnStartsAtDvs + 0.05f,
+            1.95f);
+        winterStartsAtDvs = Mathf.Clamp(
+            winterStartsAtDvs,
+            leafFallStartsAtDvs + 0.02f,
+            1.99f);
         initialRootBiomass = Mathf.Max(0.001f, initialRootBiomass);
         initialLeafBiomass = Mathf.Max(0.001f, initialLeafBiomass);
         initialWoodBiomass = Mathf.Max(0.001f, initialWoodBiomass);

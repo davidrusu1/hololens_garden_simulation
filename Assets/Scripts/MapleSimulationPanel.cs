@@ -207,6 +207,9 @@ public sealed class MapleSimulationPanel : MonoBehaviour
         GUILayout.Label(state, statusStyle, GUILayout.MinHeight(38f));
         GUILayout.BeginHorizontal();
         GUILayout.Label($"Ziua: {simulation.SimulatedDay}", valueStyle);
+        GUILayout.Label(
+            $"Anotimp: {simulation.CurrentSeasonLabel}",
+            valueStyle);
         GUILayout.Label($"DVS: {simulation.DevelopmentStage:0.000}", valueStyle);
         GUILayout.EndHorizontal();
         GUILayout.Label(

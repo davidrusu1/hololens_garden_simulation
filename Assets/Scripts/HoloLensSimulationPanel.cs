@@ -880,7 +880,8 @@ public sealed class HoloLensSimulationPanel : MonoBehaviour
             + simulation.LeafBiomass
             + simulation.WoodBiomass;
         statusText.text =
-            $"{state}  Ziua {simulation.SimulatedDay} · "
+            $"{state}  {simulation.CurrentSeasonLabel} · "
+            + $"Ziua {simulation.SimulatedDay} · "
             + $"DVS {simulation.DevelopmentStage:0.000} · "
             + $"stadiu {simulation.StructuralStage}/4\n"
             + $"Biomasă {totalBiomass:0.00} · "

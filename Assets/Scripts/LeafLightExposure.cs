@@ -393,6 +393,19 @@ public sealed class LeafLightExposure : MonoBehaviour
         Destroy(gameObject);
     }
 
+    public void PrepareForSeasonalFall()
+    {
+        shedding = true;
+        receivesLight = false;
+        StopAllCoroutines();
+        if (bladeCollider != null)
+        {
+            bladeCollider.enabled = false;
+        }
+
+        enabled = false;
+    }
+
     private void OnValidate()
     {
         minimumIlluminatedFraction = Mathf.Clamp(
