@@ -17,9 +17,10 @@ public static class MapleSeasonRuntimeVerifier
         "MapleSeasonVerifier.PreviousOptions";
 
     private static GameObject testRoot;
+    private static Plant testPlant;
     private static Leaf testLeaf;
     private static float leafStartHeight;
-    private static float leafFallStartedAt;
+    private static bool sawVisibleLeafFall;
 
     static MapleSeasonRuntimeVerifier()
     {
@@ -130,14 +131,24 @@ public static class MapleSeasonRuntimeVerifier
         {
             if (frame == 8)
             {
-                VerifyDvsSeasonsAndStartLeafFall();
+                CreateVerificationPlantAndLeaf();
             }
-            else if (testLeaf != null
-                && Time.realtimeSinceStartup - leafFallStartedAt >= 0.35f)
+            else if (frame == 12)
             {
-                VerifyVisibleLeafFallAndFinish();
+                VerifyAutumnAndRunToWinter();
             }
-            else if (frame > 5000)
+            else if (frame > 12)
+            {
+                ObserveLeafFall();
+                if (testPlant != null
+                    && testPlant.DevelopmentStage >= 2f
+                    && sawVisibleLeafFall)
+                {
+                    VerifyWinterAndFinish();
+                }
+            }
+
+            if (frame > 1200)
             {
                 throw new InvalidOperationException(
                     "Timed out while waiting for the maple leaf to fall.");
@@ -151,13 +162,10 @@ public static class MapleSeasonRuntimeVerifier
         }
     }
 
-    private static void VerifyDvsSeasonsAndStartLeafFall()
+    private static void CreateVerificationPlantAndLeaf()
     {
         testRoot = new GameObject("Maple Season Verification");
-        Plant plant = testRoot.AddComponent<Plant>();
-        plant.ResetSimulation();
-        Require(plant.CurrentSeason == MapleSeason.Spring,
-            "Maple does not start in spring.");
+        testPlant = testRoot.AddComponent<Plant>();
 
         GameObject leafObject = new GameObject("Verification Maple Leaf");
         leafObject.transform.SetParent(testRoot.transform, false);
@@ -171,20 +179,30 @@ public static class MapleSeasonRuntimeVerifier
             new Color(0.18f, 0.30f, 0.08f, 1f));
         testLeaf.GetComponent<LeafLightExposure>()
             ?.PrepareForSeasonalFall();
+    }
+
+    private static void VerifyAutumnAndRunToWinter()
+    {
+        Require(testPlant != null && testLeaf != null,
+            "The maple season verification objects were not created.");
+        testPlant.PauseSimulation();
+        testPlant.ResetSimulation();
+        Require(testPlant.CurrentSeason == MapleSeason.Spring,
+            "Maple does not start in spring.");
 
         bool sawSummer = false;
         bool sawAutumn = false;
         int safety = 0;
-        while (plant.DevelopmentStage < 1.82f && safety++ < 300)
+        while (testPlant.DevelopmentStage < 1.82f && safety++ < 300)
         {
-            plant.SimulateOneDay();
-            sawSummer |= plant.CurrentSeason == MapleSeason.Summer;
-            sawAutumn |= plant.CurrentSeason == MapleSeason.Autumn;
+            testPlant.SimulateOneDay();
+            sawSummer |= testPlant.CurrentSeason == MapleSeason.Summer;
+            sawAutumn |= testPlant.CurrentSeason == MapleSeason.Autumn;
         }
 
         Require(sawSummer, "Maple skipped the summer DVS interval.");
         Require(sawAutumn, "Maple did not enter autumn at the configured DVS.");
-        Require(plant.AutumnColorProgress > 0f,
+        Require(testPlant.AutumnColorProgress > 0f,
             "Autumn did not change the leaf colour progress.");
         Renderer bladeRenderer = testLeaf.transform
             .Find("Leaf Blade")
@@ -198,30 +216,33 @@ public static class MapleSeasonRuntimeVerifier
         Require(autumnColor.r > autumnColor.g * 2f,
             "The maple leaf did not become visibly red in autumn.");
 
-        while (plant.DevelopmentStage < 2f && safety++ < 500)
-        {
-            plant.SimulateOneDay();
-        }
-
-        Require(plant.DevelopmentStage >= 2f,
-            "Maple did not reach the winter DVS during verification.");
-        Require(plant.CurrentSeason == MapleSeason.Winter,
-            "Maple did not enter winter.");
-        Require(plant.LeafFallProgress >= 0.999f,
-            "Leaf fall did not complete at DVS 2.");
-        Require(testLeaf != null && testLeaf.SeasonalFallStarted,
-            "The maple leaf did not begin falling.");
-        Require(testLeaf.transform.parent == null,
-            "The falling leaf is still attached to the maple branch.");
         leafStartHeight = testLeaf.transform.position.y;
-        leafFallStartedAt = Time.realtimeSinceStartup;
+        sawVisibleLeafFall = false;
+        testPlant.SetSecondsPerSimulatedDay(0.05f);
+        testPlant.SetPlaybackSpeed(1f);
+        testPlant.StartSimulation();
     }
 
-    private static void VerifyVisibleLeafFallAndFinish()
+    private static void ObserveLeafFall()
     {
-        Require(testLeaf != null,
-            "The falling leaf disappeared before its animation was visible.");
-        Require(testLeaf.transform.position.y < leafStartHeight - 0.01f,
+        if (testLeaf != null
+            && testLeaf.SeasonalFallStarted
+            && testLeaf.transform.position.y < leafStartHeight - 0.01f)
+        {
+            sawVisibleLeafFall = true;
+        }
+    }
+
+    private static void VerifyWinterAndFinish()
+    {
+        ObserveLeafFall();
+        Require(testPlant != null && testPlant.DevelopmentStage >= 2f,
+            "Maple did not reach the winter DVS during verification.");
+        Require(testPlant.CurrentSeason == MapleSeason.Winter,
+            "Maple did not enter winter.");
+        Require(testPlant.LeafFallProgress >= 0.999f,
+            "Leaf fall did not complete at DVS 2.");
+        Require(sawVisibleLeafFall,
             "The red maple leaf did not move downward during its fall.");
 
         if (testRoot != null)

@@ -29,8 +29,10 @@ public sealed class Leaf : MonoBehaviour
     private float seasonalVariation;
     private float seasonalFallThreshold;
     private bool seasonalFallStarted;
+    private float visualGrowthProgress;
 
     public bool SeasonalFallStarted => seasonalFallStarted;
+    public float VisualGrowthProgress => visualGrowthProgress;
 
     public void Initialize(
         float length,
@@ -44,6 +46,7 @@ public sealed class Leaf : MonoBehaviour
         mapleSimulation = GetComponentInParent<Plant>();
         initialLeafColor = leafColor;
         initialStemColor = stemColor;
+        visualGrowthProgress = 0f;
         seasonalVariation = CreateStableVariation(GetInstanceID(), 0.17f);
         seasonalFallThreshold = Mathf.Lerp(
             0.08f,
@@ -102,6 +105,12 @@ public sealed class Leaf : MonoBehaviour
         if (!orientationInitialized
             || supportingBranch == null
             || !transform.IsChildOf(supportingBranch.transform))
+        {
+            return;
+        }
+
+        if (mapleSimulation != null
+            && !mapleSimulation.CanAdvanceVisualGrowth)
         {
             return;
         }
@@ -504,7 +513,9 @@ public sealed class Leaf : MonoBehaviour
         transform.SetParent(null, true);
         Vector3 startPosition = transform.position;
         Quaternion startRotation = transform.rotation;
-        float fallDuration = Mathf.Lerp(1.6f, 2.5f, seasonalVariation);
+        // Expressed in DVS-driven visual seconds. Even the last leaves that
+        // start near DVS 2 can finish falling before phenological maturity.
+        float fallDuration = Mathf.Lerp(0.55f, 0.9f, seasonalVariation);
         float fallDistance = Mathf.Lerp(1.25f, 2.1f, seasonalVariation);
         Vector3 sidewaysDrift = new Vector3(
             Mathf.Lerp(-0.32f, 0.32f, seasonalVariation),
@@ -518,7 +529,15 @@ public sealed class Leaf : MonoBehaviour
 
         while (elapsed < fallDuration)
         {
-            elapsed += Time.deltaTime;
+            float visualGrowthDeltaTime = GetVisualGrowthDeltaTime();
+            if (mapleSimulation != null
+                && visualGrowthDeltaTime <= 0.000001f)
+            {
+                yield return null;
+                continue;
+            }
+
+            elapsed += visualGrowthDeltaTime;
             float progress = Mathf.Clamp01(elapsed / fallDuration);
             float easedFall = progress * progress;
             float flutter = Mathf.Sin(progress * Mathf.PI * 6f
@@ -612,7 +631,7 @@ public sealed class Leaf : MonoBehaviour
     {
         float safeDuration = Mathf.Max(0.05f, duration);
         float elapsed = 0f;
-        float lastVisualGrowthUpdateAt = Time.time;
+        float lastVisualGrowthClock = GetVisualGrowthClock();
         float nextVisualGrowthUpdateAt = Time.time;
 
         petioleGrowth.localScale = new Vector3(0.01f, 1f, 1f);
@@ -628,19 +647,26 @@ public sealed class Leaf : MonoBehaviour
                 continue;
             }
 
-            float elapsedVisualTime = PlantVisualQuality.LiteModeEnabled
-                ? Mathf.Max(
-                    Time.deltaTime,
-                    Time.time - lastVisualGrowthUpdateAt)
-                : Time.deltaTime;
-            lastVisualGrowthUpdateAt = Time.time;
+            float visualGrowthClock = GetVisualGrowthClock();
+            float elapsedVisualTime = mapleSimulation != null
+                ? Mathf.Max(0f, visualGrowthClock - lastVisualGrowthClock)
+                : PlantVisualQuality.LiteModeEnabled
+                    ? Mathf.Max(
+                        Time.deltaTime,
+                        visualGrowthClock - lastVisualGrowthClock)
+                    : Time.deltaTime;
+            lastVisualGrowthClock = visualGrowthClock;
             nextVisualGrowthUpdateAt = Time.time
                 + (PlantVisualQuality.LiteModeEnabled ? 0.08f : 0f);
-            float playbackSpeed = mapleSimulation != null
-                ? Mathf.Max(0.25f, mapleSimulation.PlaybackSpeed)
-                : 1f;
-            elapsed += elapsedVisualTime * playbackSpeed;
+            if (mapleSimulation != null && elapsedVisualTime <= 0.000001f)
+            {
+                yield return null;
+                continue;
+            }
+
+            elapsed += elapsedVisualTime;
             float progress = Mathf.Clamp01(elapsed / safeDuration);
+            visualGrowthProgress = progress;
 
             float petioleProgress = Mathf.Clamp01(progress / 0.42f);
             float smoothPetiole = petioleProgress
@@ -667,6 +693,21 @@ public sealed class Leaf : MonoBehaviour
         petioleGrowth.localScale = Vector3.one;
         blade.localPosition = Vector3.right * bladeFinalPosition;
         blade.localScale = Vector3.one;
+        visualGrowthProgress = 1f;
+    }
+
+    private float GetVisualGrowthDeltaTime()
+    {
+        return mapleSimulation != null
+            ? mapleSimulation.DvsGrowthDeltaTime
+            : Time.deltaTime;
+    }
+
+    private float GetVisualGrowthClock()
+    {
+        return mapleSimulation != null
+            ? mapleSimulation.DvsGrowthClock
+            : Time.time;
     }
 
     private void OnDestroy()

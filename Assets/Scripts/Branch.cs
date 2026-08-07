@@ -416,7 +416,7 @@ public sealed class Branch : MonoBehaviour
         if (mainStem == null && currGen == 0)
         {
             mainStem = this;
-            GrowthStartedAt = Time.time;
+            GrowthStartedAt = GetVisualGrowthClock();
             growthGrammar = GetComponent<PlantLSystem>();
             if (growthGrammar == null)
             {
@@ -470,6 +470,12 @@ public sealed class Branch : MonoBehaviour
 
     private void Update()
     {
+        float visualGrowthDeltaTime = GetVisualGrowthDeltaTime();
+        if (mapleSimulation != null && visualGrowthDeltaTime <= 0.000001f)
+        {
+            return;
+        }
+
         TryStartQueuedGrowth();
 
         if (!readyToGrow || !init || modelCyl == null)
@@ -487,14 +493,16 @@ public sealed class Branch : MonoBehaviour
         }
 
         float growthRateMultiplier = mapleSimulation != null
-            ? mapleSimulation.StructuralGrowthRateMultiplier
+            ? mapleSimulation.BiologicalStructuralGrowthRateMultiplier
             : 1f;
-        growthRateMultiplier = Mathf.Max(0.15f, growthRateMultiplier);
+        growthRateMultiplier = Mathf.Max(0f, growthRateMultiplier);
         float allowedScaleY = maxHeight * GetStructuralLengthFraction();
         float nextScaleY = Mathf.MoveTowards(
             modelCyl.localScale.y,
             allowedScaleY,
-            vitezaCrestere * growthRateMultiplier * Time.deltaTime);
+            vitezaCrestere
+                * growthRateMultiplier
+                * visualGrowthDeltaTime);
         float targetScaleX = originalRadiusX
             * cumulativeThicknessScale
             * GetStructuralThicknessFraction();
@@ -515,11 +523,11 @@ public sealed class Branch : MonoBehaviour
         scale.x = Mathf.MoveTowards(
             scale.x,
             targetScaleX,
-            thicknessGrowthSpeed * Time.deltaTime);
+            thicknessGrowthSpeed * visualGrowthDeltaTime);
         scale.z = Mathf.MoveTowards(
             scale.z,
             targetScaleZ,
-            thicknessGrowthSpeed * Time.deltaTime);
+            thicknessGrowthSpeed * visualGrowthDeltaTime);
         modelCyl.localScale = scale;
 
         // A Unity cylinder is two units high. Moving its centre by scaleY keeps
@@ -540,13 +548,13 @@ public sealed class Branch : MonoBehaviour
         {
             if (structuralStageReachedAt < 0f)
             {
-                structuralStageReachedAt = Time.time;
+                structuralStageReachedAt = GetVisualGrowthClock();
                 return;
             }
 
             float stagePause = secondsBetweenStructuralStages
-                / growthRateMultiplier;
-            if (Time.time - structuralStageReachedAt < stagePause)
+                / Mathf.Max(0.2f, growthRateMultiplier);
+            if (GetVisualGrowthClock() - structuralStageReachedAt < stagePause)
             {
                 return;
             }
@@ -573,7 +581,8 @@ public sealed class Branch : MonoBehaviour
 
     private void UpdateLongTermSecondaryGrowth()
     {
-        float elapsedGrowthTime = Time.deltaTime;
+        float growthClock = GetVisualGrowthClock();
+        float elapsedGrowthTime = GetVisualGrowthDeltaTime();
         if (PlantVisualQuality.LiteModeEnabled)
         {
             if (Time.time < nextSecondaryGrowthUpdateAt)
@@ -584,19 +593,24 @@ public sealed class Branch : MonoBehaviour
             if (lastSecondaryGrowthUpdateAt >= 0f)
             {
                 elapsedGrowthTime = Mathf.Max(
-                    Time.deltaTime,
-                    Time.time - lastSecondaryGrowthUpdateAt);
+                    0f,
+                    growthClock - lastSecondaryGrowthUpdateAt);
             }
 
             nextSecondaryGrowthUpdateAt = Time.time + 0.2f;
         }
 
-        lastSecondaryGrowthUpdateAt = Time.time;
+        lastSecondaryGrowthUpdateAt = growthClock;
+        if (elapsedGrowthTime <= 0.000001f)
+        {
+            return;
+        }
+
         float orderProgress = Mathf.Clamp01(
             currGen / (float)MaximumBranchGeneration);
         float orderPriority = Mathf.Lerp(1.18f, 0.72f, orderProgress);
         float stemAgeSeconds = GrowthStartedAt >= 0f
-            ? Mathf.Max(0f, Time.time - GrowthStartedAt)
+            ? Mathf.Max(0f, growthClock - GrowthStartedAt)
             : 0f;
         float ageNormalizationSeconds = Mathf.Max(
             5f,
@@ -632,8 +646,7 @@ public sealed class Branch : MonoBehaviour
             * chronologicalAgePriority
             * trunkPriority
             * biologicalDrive
-            * developmentalDrive
-            * GetPlaybackSpeed();
+            * developmentalDrive;
         float progressPerSecond =
             currentSecondaryGrowthRateMultiplier
             / Mathf.Max(5f, secondsToFullSecondaryGrowth);
@@ -774,13 +787,21 @@ public sealed class Branch : MonoBehaviour
         runtimeLeafCount = plannedLeafBudget >= 0
             ? plannedLeafBudget
             : Mathf.Max(0, leavesPerStem);
-        GrowthStartedAt = Time.time;
+        // Plant.RestartCompleteSimulation resets the DVS clock immediately
+        // after this visual reset, so the new visual lifetime starts at zero.
+        GrowthStartedAt = 0f;
         init = true;
         readyToGrow = true;
     }
 
     private void UpdateWeightBending()
     {
+        float visualGrowthDeltaTime = GetVisualGrowthDeltaTime();
+        if (mapleSimulation != null && visualGrowthDeltaTime <= 0.000001f)
+        {
+            return;
+        }
+
         if (Time.time >= nextWeightEvaluationAt)
         {
             nextWeightEvaluationAt = Time.time + GetWeightEvaluationInterval();
@@ -790,7 +811,7 @@ public sealed class Branch : MonoBehaviour
         currentWeightBendDegrees = Mathf.MoveTowards(
             currentWeightBendDegrees,
             targetWeightBendDegrees,
-            weightBendResponse * GetPlaybackSpeed() * Time.deltaTime);
+            weightBendResponse * visualGrowthDeltaTime);
         transform.localRotation = Quaternion.AngleAxis(
             currentWeightBendDegrees,
             weightBendAxis) * unloadedLocalRotation;
@@ -1233,7 +1254,7 @@ public sealed class Branch : MonoBehaviour
         plannedLeafBudget = plan.LeafBudget;
         cumulativeThicknessScale = parent.cumulativeThicknessScale
             * plan.ThicknessMultiplier;
-        GrowthStartedAt = Time.time;
+        GrowthStartedAt = GetVisualGrowthClock();
         maxed = false;
         jointsStarted = false;
         currentStructuralStage = 1;
@@ -1295,6 +1316,12 @@ public sealed class Branch : MonoBehaviour
         {
             Branch candidate = PendingBranchGrowth[index];
             if (candidate.currGen != priorityGeneration)
+            {
+                continue;
+            }
+
+            if (candidate.mapleSimulation != null
+                && !candidate.mapleSimulation.CanAdvanceVisualGrowth)
             {
                 continue;
             }
@@ -1402,7 +1429,7 @@ public sealed class Branch : MonoBehaviour
                 float elapsedDelay = 0f;
                 while (elapsedDelay < delayBranches)
                 {
-                    elapsedDelay += Time.deltaTime * GetPlaybackSpeed();
+                    elapsedDelay += GetVisualGrowthDeltaTime();
                     yield return null;
                 }
             }
@@ -2398,13 +2425,16 @@ public sealed class Branch : MonoBehaviour
             // first reaches it, which can look like growth in empty space.
             if (nextLeafNodeSupportedSince < 0f)
             {
-                nextLeafNodeSupportedSince = Time.time;
+                nextLeafNodeSupportedSince = GetVisualGrowthClock();
                 break;
             }
 
+            float leafBiologicalRate = mapleSimulation != null
+                ? mapleSimulation.BiologicalLeafGrowthRateMultiplier
+                : 1f;
             float effectiveMaturationDelay = leafNodeMaturationDelay
-                / GetPlaybackSpeed();
-            if (Time.time - nextLeafNodeSupportedSince
+                / Mathf.Max(0.2f, leafBiologicalRate);
+            if (GetVisualGrowthClock() - nextLeafNodeSupportedSince
                 < effectiveMaturationDelay)
             {
                 break;
@@ -2477,11 +2507,18 @@ public sealed class Branch : MonoBehaviour
         supportedWeightCacheDirty = true;
     }
 
-    private float GetPlaybackSpeed()
+    private float GetVisualGrowthDeltaTime()
     {
         return mapleSimulation != null
-            ? Mathf.Max(0.25f, mapleSimulation.PlaybackSpeed)
-            : 1f;
+            ? mapleSimulation.DvsGrowthDeltaTime
+            : Time.deltaTime;
+    }
+
+    private float GetVisualGrowthClock()
+    {
+        return mapleSimulation != null
+            ? mapleSimulation.DvsGrowthClock
+            : Time.time;
     }
 
     private Quaternion CreateHorizontalLeafRotation(float azimuth)

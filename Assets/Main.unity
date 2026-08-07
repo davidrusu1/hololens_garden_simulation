@@ -122,6 +122,39 @@ NavMeshSettings:
     debug:
       m_Flags: 0
   m_NavMeshData: {fileID: 0}
+--- !u!1 &81389814
+GameObject:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  serializedVersion: 6
+  m_Component:
+  - component: {fileID: 81389815}
+  m_Layer: 0
+  m_Name: Garden Content
+  m_TagString: Untagged
+  m_Icon: {fileID: 0}
+  m_NavMeshLayer: 0
+  m_StaticEditorFlags: 0
+  m_IsActive: 1
+--- !u!4 &81389815
+Transform:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 81389814}
+  serializedVersion: 2
+  m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
+  m_LocalPosition: {x: 0, y: 0, z: 0}
+  m_LocalScale: {x: 0.38, y: 0.38, z: 0.38}
+  m_ConstrainProportionsScale: 0
+  m_Children:
+  - {fileID: 1751255535472044952}
+  - {fileID: 1748491751}
+  m_Father: {fileID: 1309171535}
+  m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
 --- !u!1001 &389264727
 PrefabInstance:
   m_ObjectHideFlags: 0
@@ -310,8 +343,8 @@ MonoBehaviour:
   m_Enabled: 1
   m_EditorHideFlags: 0
   m_Script: {fileID: 11500000, guid: a79441f348de89743a2939f4d699eac1, type: 3}
-  m_Name: 
-  m_EditorClassIdentifier: 
+  m_Name:
+  m_EditorClassIdentifier:
   m_RenderShadows: 1
   m_RequiresDepthTextureOption: 2
   m_RequiresOpaqueTextureOption: 2
@@ -344,6 +377,67 @@ MonoBehaviour:
     m_MipBias: 0
     m_VarianceClampScale: 0.9
     m_ContrastAdaptiveSharpening: 0
+--- !u!1 &1309171533
+GameObject:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  serializedVersion: 6
+  m_Component:
+  - component: {fileID: 1309171535}
+  - component: {fileID: 1309171534}
+  m_Layer: 0
+  m_Name: Gardner sim
+  m_TagString: Untagged
+  m_Icon: {fileID: 0}
+  m_NavMeshLayer: 0
+  m_StaticEditorFlags: 0
+  m_IsActive: 1
+--- !u!114 &1309171534
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1309171533}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 6f7a9c1d2e3b4a5f8c9d0e1f2a3b4c5d, type: 3}
+  m_Name:
+  m_EditorClassIdentifier:
+  mapleRoot: {fileID: 1751255535472044954}
+  mapleSimulation: {fileID: 1751255535472044953}
+  sunflowerRoot: {fileID: 1748491750}
+  sunflowerSimulation: {fileID: 1748491753}
+  sunflowerField: {fileID: 1748491752}
+  gardenContent: {fileID: 81389815}
+  selectedPlant: 2
+  startAutomatically: 0
+  plantsDistance: 2.25
+  plantsBelowEyeLevel: 0.95
+  panelDistance: 1.1
+  panelHorizontalOffset: -0.35
+  panelVerticalOffset: -0.05
+  panelWorldScale: 0.00055
+  showcaseScale: 0.38
+  sideBySideSpacing: 3.8
+--- !u!4 &1309171535
+Transform:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1309171533}
+  serializedVersion: 2
+  m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
+  m_LocalPosition: {x: 0, y: 0, z: 0}
+  m_LocalScale: {x: 1, y: 1, z: 1}
+  m_ConstrainProportionsScale: 0
+  m_Children:
+  - {fileID: 81389815}
+  m_Father: {fileID: 0}
+  m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
 --- !u!1 &1341134017
 GameObject:
   m_ObjectHideFlags: 0
@@ -372,8 +466,8 @@ MonoBehaviour:
   m_Enabled: 1
   m_EditorHideFlags: 0
   m_Script: {fileID: 11500000, guid: 474bcb49853aa07438625e644c072ee6, type: 3}
-  m_Name: 
-  m_EditorClassIdentifier: 
+  m_Name:
+  m_EditorClassIdentifier:
   m_Version: 3
   m_UsePipelineSettings: 1
   m_AdditionalLightsShadowResolutionTier: 2
@@ -462,29 +556,120 @@ Transform:
   m_Children: []
   m_Father: {fileID: 0}
   m_LocalEulerAnglesHint: {x: 50, y: -30, z: 0}
+--- !u!1 &1748491750
+GameObject:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  serializedVersion: 6
+  m_Component:
+  - component: {fileID: 1748491751}
+  - component: {fileID: 1748491752}
+  - component: {fileID: 1748491753}
+  m_Layer: 0
+  m_Name: Sunflower Simulation
+  m_TagString: Untagged
+  m_Icon: {fileID: 0}
+  m_NavMeshLayer: 0
+  m_StaticEditorFlags: 0
+  m_IsActive: 1
+--- !u!4 &1748491751
+Transform:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1748491750}
+  serializedVersion: 2
+  m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
+  m_LocalPosition: {x: 0, y: 0, z: 0}
+  m_LocalScale: {x: 1, y: 1, z: 1}
+  m_ConstrainProportionsScale: 0
+  m_Children: []
+  m_Father: {fileID: 81389815}
+  m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
+--- !u!114 &1748491752
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1748491750}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 39754affbdab44f3ea7aedab1a2b6a7c, type: 3}
+  m_Name:
+  m_EditorClassIdentifier:
+  sunflowerVisualPrefab: {fileID: 6966580366650232745, guid: aebd564192ac04d20b8ed06edcb3e185, type: 3}
+  sunflowerCount: 1
+  cassavaCount: 0
+  horizontalSpacing: 1.25
+  rowSpacing: 1.3
+  staggerAlternateRows: 1
+  localOrigin: {x: 0, y: 0, z: 0}
+  sunflowerMatureHeightMeters: 2.35
+  sunflowerAuthoredMatureHeightMeters: 4.26
+  cassavaMatureHeightMeters: 1.85
+--- !u!114 &1748491753
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1748491750}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: bfe70a8845c704a39bb47f99b59daf60, type: 3}
+  m_Name:
+  m_EditorClassIdentifier:
+  profile: {fileID: 11400000, guid: 1be7822cdbd5b4f46bcd4bd82199b3b8, type: 2}
+  stemGrowthController: {fileID: 0}
+  mixedCropFieldController: {fileID: 1748491752}
+  requestedSunflowerCount: 1
+  requestedCassavaCount: 0
+  currentTemperature: 24
+  currentMinimumTemperature: 18
+  currentMaximumTemperature: 30
+  currentDayLength: 14
+  currentSolarRadiation: 18
+  soilWaterAvailability: 1
+  secondsPerSimulatedDay: 0.5
+  visualGrowthSpeed: 1
+  visualMorphologySpeedFactor: 2
+  sunflowerPlantDensityPerHectare: 50000
+  showRuntimePanel: 0
 --- !u!1001 &1751255535472044951
 PrefabInstance:
   m_ObjectHideFlags: 0
   serializedVersion: 2
   m_Modification:
     serializedVersion: 3
-    m_TransformParent: {fileID: 0}
+    m_TransformParent: {fileID: 81389815}
     m_Modifications:
     - target: {fileID: 1862162172695433606, guid: c319ef8c1744049439c3c4ce71c2350a, type: 3}
       propertyPath: m_Name
-      value: Plant
+      value: Maple Simulation
+      objectReference: {fileID: 0}
+    - target: {fileID: 2530686683560297851, guid: c319ef8c1744049439c3c4ce71c2350a, type: 3}
+      propertyPath: placeRelativeToViewerOnStart
+      value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: 3629949806261493487, guid: c319ef8c1744049439c3c4ce71c2350a, type: 3}
+      propertyPath: m_Enabled
+      value: 0
       objectReference: {fileID: 0}
     - target: {fileID: 3799635863657587324, guid: c319ef8c1744049439c3c4ce71c2350a, type: 3}
       propertyPath: m_LocalPosition.x
-      value: -1.8288212
+      value: 0
       objectReference: {fileID: 0}
     - target: {fileID: 3799635863657587324, guid: c319ef8c1744049439c3c4ce71c2350a, type: 3}
       propertyPath: m_LocalPosition.y
-      value: 2.4
+      value: 0
       objectReference: {fileID: 0}
     - target: {fileID: 3799635863657587324, guid: c319ef8c1744049439c3c4ce71c2350a, type: 3}
       propertyPath: m_LocalPosition.z
-      value: 3.66
+      value: 0
       objectReference: {fileID: 0}
     - target: {fileID: 3799635863657587324, guid: c319ef8c1744049439c3c4ce71c2350a, type: 3}
       propertyPath: m_LocalRotation.w
@@ -514,16 +699,41 @@ PrefabInstance:
       propertyPath: m_LocalEulerAnglesHint.z
       value: 0
       objectReference: {fileID: 0}
+    - target: {fileID: 7891304127908726044, guid: c319ef8c1744049439c3c4ce71c2350a, type: 3}
+      propertyPath: startAutomatically
+      value: 0
+      objectReference: {fileID: 0}
     m_RemovedComponents: []
     m_RemovedGameObjects: []
     m_AddedGameObjects: []
     m_AddedComponents: []
   m_SourcePrefab: {fileID: 100100000, guid: c319ef8c1744049439c3c4ce71c2350a, type: 3}
+--- !u!4 &1751255535472044952 stripped
+Transform:
+  m_CorrespondingSourceObject: {fileID: 3799635863657587324, guid: c319ef8c1744049439c3c4ce71c2350a, type: 3}
+  m_PrefabInstance: {fileID: 1751255535472044951}
+  m_PrefabAsset: {fileID: 0}
+--- !u!114 &1751255535472044953 stripped
+MonoBehaviour:
+  m_CorrespondingSourceObject: {fileID: 7891304127908726044, guid: c319ef8c1744049439c3c4ce71c2350a, type: 3}
+  m_PrefabInstance: {fileID: 1751255535472044951}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1751255535472044954}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 74c0936e2535dad47a2515c98bc5563d, type: 3}
+  m_Name:
+  m_EditorClassIdentifier:
+--- !u!1 &1751255535472044954 stripped
+GameObject:
+  m_CorrespondingSourceObject: {fileID: 1862162172695433606, guid: c319ef8c1744049439c3c4ce71c2350a, type: 3}
+  m_PrefabInstance: {fileID: 1751255535472044951}
+  m_PrefabAsset: {fileID: 0}
 --- !u!1660057539 &9223372036854775807
 SceneRoots:
   m_ObjectHideFlags: 0
   m_Roots:
   - {fileID: 1042461085}
   - {fileID: 1341134020}
-  - {fileID: 1751255535472044951}
   - {fileID: 389264727}
+  - {fileID: 1309171535}

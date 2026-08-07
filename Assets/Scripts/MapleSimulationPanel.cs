@@ -32,6 +32,11 @@ public sealed class MapleSimulationPanel : MonoBehaviour
     [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.AfterSceneLoad)]
     private static void AttachPanel()
     {
+        if (FindObjectOfType<GardnerSimController>(true) != null)
+        {
+            return;
+        }
+
         Plant plant = FindObjectOfType<Plant>();
         if (plant != null
             && plant.GetComponent<MapleSimulationPanel>() == null)

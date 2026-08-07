@@ -13,7 +13,7 @@ PlayerSettings:
   useOnDemandResources: 0
   accelerometerFrequency: 60
   companyName: ICI
-  productName: Maple Growth Simulation
+  productName: Gardner sim
   defaultCursor: {fileID: 0}
   cursorHotspot: {x: 0, y: 0}
   m_SplashScreenBackgroundColor: {r: 0.13725491, g: 0.12156863, b: 0.1254902, a: 1}
@@ -169,7 +169,7 @@ PlayerSettings:
   applicationIdentifier:
     Android: com.unity.template.mixedreality
     Standalone: com.unity.template.mr
-    Windows Store Apps: com.ici.maplegrowthsimulation
+    Windows Store Apps: com.ici.gardnersim
   buildNumber:
     Standalone: 0
     VisionOS: 0
@@ -862,14 +862,15 @@ PlayerSettings:
   apiCompatibilityLevelPerPlatform: {}
   m_RenderingPath: 1
   m_MobileRenderingPath: 1
-  metroPackageName: ICI.MapleGrowthSimulation
+  metroPackageName: ICI.GardnerSim
   metroPackageVersion: 1.0.0.0
   metroCertificatePath: Assets/WSATestCertificate.pfx
   metroCertificatePassword: 
   metroCertificateSubject: ICI
   metroCertificateIssuer: ICI
   metroCertificateNotAfter: 0075f5b42242de01
-  metroApplicationDescription: Real-time maple growth simulation for HoloLens 2.
+  metroApplicationDescription: DVS-driven maple and sunflower growth simulation for
+    HoloLens 2.
   wsaImages: {}
   metroTileShortName: Maple Growth
   metroTileShowName: 0

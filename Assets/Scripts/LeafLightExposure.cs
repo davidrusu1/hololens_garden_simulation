@@ -50,6 +50,7 @@ public sealed class LeafLightExposure : MonoBehaviour
     private int consecutiveDarkEvaluations;
     private bool shedding;
     private Branch supportingStem;
+    private Plant mapleSimulation;
 
     public float TotalLeafArea => totalLeafArea;
     public float IlluminatedLeafArea => illuminatedLeafArea;
@@ -60,6 +61,7 @@ public sealed class LeafLightExposure : MonoBehaviour
     {
         blade = leafBlade;
         supportingStem = GetComponentInParent<Branch>();
+        mapleSimulation = GetComponentInParent<Plant>();
         MeshFilter meshFilter = blade != null
             ? blade.GetComponent<MeshFilter>()
             : null;
@@ -99,11 +101,13 @@ public sealed class LeafLightExposure : MonoBehaviour
 
     private IEnumerator EvaluateLightRepeatedly(float firstEvaluationDelay)
     {
-        yield return new WaitForSeconds(firstEvaluationDelay);
+        yield return WaitForVisualGrowthSeconds(firstEvaluationDelay);
 
         while (!shedding)
         {
-            while (!TryAcquireLightEvaluationSlot())
+            while ((mapleSimulation != null
+                    && !mapleSimulation.CanAdvanceVisualGrowth)
+                || !TryAcquireLightEvaluationSlot())
             {
                 yield return null;
             }
@@ -127,7 +131,23 @@ public sealed class LeafLightExposure : MonoBehaviour
             float staggeredInterval = evaluationInterval
                 * (PlantVisualQuality.LiteModeEnabled ? 3f : 1f)
                 * Random.Range(0.85f, 1.15f);
-            yield return new WaitForSeconds(staggeredInterval);
+            yield return WaitForVisualGrowthSeconds(staggeredInterval);
+        }
+    }
+
+    private IEnumerator WaitForVisualGrowthSeconds(float duration)
+    {
+        if (mapleSimulation == null)
+        {
+            yield return new WaitForSeconds(duration);
+            yield break;
+        }
+
+        float startingClock = mapleSimulation.DvsGrowthClock;
+        while (!shedding
+            && mapleSimulation.DvsGrowthClock - startingClock < duration)
+        {
+            yield return null;
         }
     }
 

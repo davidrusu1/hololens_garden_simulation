@@ -23,10 +23,10 @@ public static class HoloLensPlantSceneSetup
     private const string OpenXrLoaderType =
         "UnityEngine.XR.OpenXR.OpenXRLoader";
     private const string CompanyName = "ICI";
-    private const string ProductName = "Maple Growth Simulation";
-    private const string PackageName = "ICI.MapleGrowthSimulation";
+    private const string ProductName = "Gardner sim";
+    private const string PackageName = "ICI.GardnerSim";
     private const string ApplicationIdentifier =
-        "com.ici.maplegrowthsimulation";
+        "com.ici.gardnersim";
 
     [MenuItem("Tools/Plant Simulation/Rebuild HoloLens Experience")]
     public static void ConfigureHoloLensScene()
@@ -411,7 +411,7 @@ public static class HoloLensPlantSceneSetup
         PlayerSettings.WSA.transparentSwapchain = false;
         PlayerSettings.WSA.packageName = PackageName;
         PlayerSettings.WSA.applicationDescription =
-            "Real-time maple growth simulation for HoloLens 2.";
+            "DVS-driven maple and sunflower growth simulation for HoloLens 2.";
         PlayerSettings.WSA.SetTargetDeviceFamily(
             PlayerSettings.WSATargetFamily.Holographic,
             true);

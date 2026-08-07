@@ -10,6 +10,7 @@ public enum MapleSeason
     Winter
 }
 
+[DefaultExecutionOrder(-100)]
 [DisallowMultipleComponent]
 public sealed class Plant : MonoBehaviour
 {
@@ -86,6 +87,10 @@ public sealed class Plant : MonoBehaviour
     [SerializeField]
     private bool liteModeEnabled = true;
 
+    [SerializeField, Min(1f)]
+    [Tooltip("Visual growth time produced by one unit of DVS. The animation clock advances only while DVS is advancing.")]
+    private float visualSecondsPerDvs = 20f;
+
     [Header("Runtime WOFOST state")]
     [SerializeField]
     private bool simulationRunning;
@@ -136,6 +141,15 @@ public sealed class Plant : MonoBehaviour
     private float dailyRootGrowth;
 
     [SerializeField]
+    private float dailyDevelopmentIncrement;
+
+    [SerializeField]
+    private float dvsGrowthDeltaTime;
+
+    [SerializeField]
+    private float dvsGrowthClock;
+
+    [SerializeField]
     private MapleSeason currentSeason = MapleSeason.Spring;
 
     [SerializeField, Range(0f, 1f)]
@@ -172,10 +186,31 @@ public sealed class Plant : MonoBehaviour
     public string CurrentSeasonLabel => GetSeasonLabel(currentSeason);
     public float BiologicalStructuralGrowthRateMultiplier { get; private set; } = 1f;
     public float BiologicalLeafGrowthRateMultiplier { get; private set; } = 1f;
-    public float StructuralGrowthRateMultiplier =>
-        BiologicalStructuralGrowthRateMultiplier * playbackSpeed;
-    public float LeafGrowthRateMultiplier =>
-        BiologicalLeafGrowthRateMultiplier * playbackSpeed;
+    public float DailyDevelopmentIncrement => dailyDevelopmentIncrement;
+    public float DvsGrowthDeltaTime => dvsGrowthDeltaTime;
+    public float DvsGrowthClock => dvsGrowthClock;
+    public bool CanAdvanceVisualGrowth =>
+        simulationRunning && dvsGrowthDeltaTime > 0.000001f;
+
+    private void Update()
+    {
+        float predictedDailyDevelopment = developmentStage >= 2f
+            ? dailyDevelopmentIncrement
+            : PredictDailyDevelopmentIncrement();
+        if (!simulationRunning || predictedDailyDevelopment <= 0.000001f)
+        {
+            dvsGrowthDeltaTime = 0f;
+            return;
+        }
+
+        float dvsPerRealSecond = predictedDailyDevelopment
+            * playbackSpeed
+            / Mathf.Max(0.02f, secondsPerSimulatedDay);
+        dvsGrowthDeltaTime = Time.unscaledDeltaTime
+            * dvsPerRealSecond
+            * visualSecondsPerDvs;
+        dvsGrowthClock += dvsGrowthDeltaTime;
+    }
 
     private void Start()
     {
@@ -234,6 +269,7 @@ public sealed class Plant : MonoBehaviour
     public void PauseSimulation()
     {
         simulationRunning = false;
+        dvsGrowthDeltaTime = 0f;
         if (simulationRoutine != null)
         {
             StopCoroutine(simulationRoutine);
@@ -259,6 +295,9 @@ public sealed class Plant : MonoBehaviour
         dailyLeafGrowth = 0f;
         dailyWoodGrowth = 0f;
         dailyRootGrowth = 0f;
+        dailyDevelopmentIncrement = 0f;
+        dvsGrowthDeltaTime = 0f;
+        dvsGrowthClock = 0f;
         BiologicalStructuralGrowthRateMultiplier = 0.45f;
         BiologicalLeafGrowthRateMultiplier = 0.55f;
         UpdateSeasonalState();
@@ -465,11 +504,7 @@ public sealed class Plant : MonoBehaviour
         while (simulationRunning)
         {
             SimulateOneDay();
-            if (developmentStage >= 2f)
-            {
-                simulationRunning = false;
-                break;
-            }
+            bool reachedMaturity = developmentStage >= 2f;
 
             float elapsedSimulationTime = 0f;
             while (simulationRunning
@@ -479,6 +514,13 @@ public sealed class Plant : MonoBehaviour
                     * playbackSpeed;
                 yield return null;
             }
+
+            if (reachedMaturity)
+            {
+                simulationRunning = false;
+                dvsGrowthDeltaTime = 0f;
+                break;
+            }
         }
 
         simulationRoutine = null;
@@ -486,30 +528,42 @@ public sealed class Plant : MonoBehaviour
 
     private void UpdatePhenology()
     {
-        float effectiveTemperature = Mathf.Max(
-            0f,
-            averageTemperature - baseDevelopmentTemperature);
-        if (developmentStage < 1f)
-        {
-            developmentStage = Mathf.Min(
-                1f,
-                developmentStage
-                    + effectiveTemperature
-                    / thermalTimeBudBurstToCrownExpansion);
-        }
-        else if (developmentStage < 2f)
-        {
-            developmentStage = Mathf.Min(
-                2f,
-                developmentStage
-                    + effectiveTemperature
-                    / thermalTimeCrownExpansionToMaturity);
-        }
+        float previousDevelopmentStage = developmentStage;
+        developmentStage = Mathf.Min(
+            2f,
+            developmentStage + PredictDailyDevelopmentIncrement());
 
         structuralStage = Mathf.Clamp(
             Mathf.FloorToInt(developmentStage * 2f) + 1,
             1,
             4);
+        dailyDevelopmentIncrement = Mathf.Max(
+            0f,
+            developmentStage - previousDevelopmentStage);
+    }
+
+    private float PredictDailyDevelopmentIncrement()
+    {
+        float effectiveTemperature = Mathf.Max(
+            0f,
+            averageTemperature - baseDevelopmentTemperature);
+        if (developmentStage < 1f)
+        {
+            return Mathf.Min(
+                1f - developmentStage,
+                effectiveTemperature
+                    / thermalTimeBudBurstToCrownExpansion);
+        }
+
+        if (developmentStage < 2f)
+        {
+            return Mathf.Min(
+                2f - developmentStage,
+                effectiveTemperature
+                    / thermalTimeCrownExpansionToMaturity);
+        }
+
+        return 0f;
     }
 
     private float CalculateTemperatureResponse()
@@ -583,5 +637,6 @@ public sealed class Plant : MonoBehaviour
         initialRootBiomass = Mathf.Max(0.001f, initialRootBiomass);
         initialLeafBiomass = Mathf.Max(0.001f, initialLeafBiomass);
         initialWoodBiomass = Mathf.Max(0.001f, initialWoodBiomass);
+        visualSecondsPerDvs = Mathf.Max(1f, visualSecondsPerDvs);
     }
 }

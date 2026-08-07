@@ -803,6 +803,11 @@ public sealed class HoloLensSimulationPanel : MonoBehaviour
             return;
         }
 
+        if (FindObjectOfType<GardnerSimController>(true) != null)
+        {
+            return;
+        }
+
         legacyPanel = GetComponent<MapleSimulationPanel>();
         if (legacyPanel == null)
         {
