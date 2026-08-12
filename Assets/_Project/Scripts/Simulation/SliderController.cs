@@ -41,8 +41,11 @@ public class UIController : MonoBehaviour
     [SerializeField] private MrtkSlider secondsPerDaySlider;
     [SerializeField] private MrtkSlider visualGrowthSpeedSlider;
 
-    [Header("Start Simulation Button")]
+    [Header("Playback Buttons")]
     [SerializeField] private PressableButton startSimulationButton;
+    [SerializeField] private PressableButton pauseSimulationButton;
+    [SerializeField] private PressableButton resumeSimulationButton;
+    [SerializeField] private PressableButton stopSimulationButton;
 
     // Internal state tracking
     private int sunflowerCount;
@@ -145,14 +148,65 @@ public class UIController : MonoBehaviour
                 simulation?.StartSimulation(); 
             });
         }
+
+        
+        // Wire up the Pause Button
+        if (pauseSimulationButton != null)
+        {
+            pauseSimulationButton.OnClicked.AddListener(() =>
+            {
+                simulation?.PauseSimulation(); 
+            });
+        }
+
+        // Wire up a Resume Button
+        if (resumeSimulationButton != null)
+        {
+            resumeSimulationButton.OnClicked.AddListener(() =>
+            {
+                simulation?.ResumeSimulation(); 
+            });
+        }
+        
+        // Wire up the Stop Button
+        if (stopSimulationButton != null)
+        {
+            stopSimulationButton.OnClicked.AddListener(() =>
+            {
+                simulation?.StopSimulation(); 
+            });
+        }
     }
 
     private void Update()
     {
         // Continuously update the text with the simulation's current day
-        if (simulation != null && currentDayLabel != null)
+        if (simulation != null)
         {
-            currentDayLabel.text = "Current Day: " + simulation.CurrentDay; // Grabs the day from the simulation[cite: 4]
+            // 1. Actualizăm ziua curentă
+            if (currentDayLabel != null)
+            {
+                currentDayLabel.text = "Current Day: " + simulation.CurrentDay;
+            }
+
+            // 2. Verificăm starea simulării
+            bool isRunning = simulation.IsRunning;
+            
+            // Ne folosim de mesajul de status setat de noi în scriptul de bază pentru a ști dacă e pe pauză
+            bool isPaused = simulation.StatusMessage == "Simulare în pauză."; 
+
+            // 3. Afișăm/Ascundem butoanele dinamic
+            if (startSimulationButton != null)
+                startSimulationButton.gameObject.SetActive(!isRunning && !isPaused); // Apare doar la început / după stop
+
+            if (pauseSimulationButton != null)
+                pauseSimulationButton.gameObject.SetActive(isRunning); // Apare doar când simularea merge
+
+            if (resumeSimulationButton != null)
+                resumeSimulationButton.gameObject.SetActive(!isRunning && isPaused); // Apare doar pe pauză
+
+            if (stopSimulationButton != null)
+                stopSimulationButton.gameObject.SetActive(isRunning || isPaused); // Apare oricând simularea e activă
         }
     }
 

@@ -19,7 +19,7 @@ namespace ICI.PlantGrowth.Phenology
         private const float MinimumSolarRadiation = 0f;
         private const float MaximumSolarRadiation = 35f;
         private const float MinimumSecondsPerDay = 0.1f;
-        private const float MaximumSecondsPerDay = 3f;
+        private const float MaximumSecondsPerDay = 5f;
         private const float ReferenceSecondsPerSimulatedDay = 0.5f;
         private const float MinimumVisualGrowthSpeed = 0.25f;
         private const float MaximumVisualGrowthSpeed = 4f;
@@ -251,6 +251,29 @@ namespace ICI.PlantGrowth.Phenology
                 + $"at Tmin {currentMinimumTemperature:0.0} °C, Tmax {currentMaximumTemperature:0.0} °C, "
                 + $"{currentSolarRadiation:0.0} MJ/m²/day and {currentDayLength:0.0} h day length.",
                 this);
+        }
+
+        public void PauseSimulation()
+        {
+            if (!isRunning) return;
+            
+            isRunning = false;
+            statusMessage = "Simulare în pauză."; // Simulation paused
+            
+            // Freeze the visual 3D animations
+            stemGrowthController?.StopGrowth();
+            mixedCropFieldController?.StopAllGrowth();
+        }
+
+        public void ResumeSimulation()
+        {
+            if (isRunning || profile == null) return;
+            
+            isRunning = true;
+            statusMessage = "Simulare reluată."; // Simulation resumed
+            
+            // Re-apply the speed variables to wake the visual animations back up
+            ApplyVisualGrowthSpeed(true);
         }
 
         public void StopSimulation()
